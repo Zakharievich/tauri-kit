@@ -1,0 +1,36 @@
+# Project: tauri-kit — Cross-platform Video/Audio Conference App
+## Stack
+- Frontend: React + TypeScript + Vite (inside Tauri)
+- Backend (Tauri): Rust (src-tauri/)
+- Token server: Node.js + TypeScript (server/)
+- Media: LiveKit (self-hosted SFU)
+- Agent (OPTIONAL): Python
+  STT: faster-whisper-server (model: tiny)
+  Summary: Ollama qwen2.5:0.5b
+  Enabled via ENABLE_STT=true / ENABLE_SUMMARY=true in agent/.env
+
+## Architecture modules
+- src/           → React frontend (components, hooks, pages, services)
+- src-tauri/     → Rust Tauri commands (IPC, file save)
+- server/        → Token server (JWT, room lifecycle)
+- agent/         → OPTIONAL Python LiveKit Agent
+- docs/          → README, ARCHITECTURE, TESTING, AI_GUIDELINES
+- .github/       → CI workflow
+
+## Principles (SOLID, Modular)
+- Each module has single responsibility
+- No business logic in UI components
+- All Tauri commands typed, all errors handled
+- Never store user data or session history server-side
+- Tokens: one-time use, TTL 1h, destroyed after session
+- STT/summary: fully opt-in, graceful degradation if agent absent
+
+## Commit style: feat:, fix:, chore:, docs:, test:, refactor:
+
+## Security (HIGH RISK ZONES)
+- Tokens: short TTL, no reuse, no server-side storage
+- E2EE: LiveKit ExternalE2EEKeyProvider, key never logged or sent via server
+- No API keys/secrets in source — only .env files
+- All .env in .gitignore
+
+## Before declaring done: pnpm build && pnpm lint && tests pass
