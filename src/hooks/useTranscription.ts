@@ -61,8 +61,8 @@ export function useTranscription(enabled = true): UseTranscriptionState {
       setText(formatted);
 
       invoke("save_transcript", {
-        content: formatted,
-        fileName: `transcript-${Date.now()}.txt`,
+        transcriptContent: formatted,
+        filename: `transcript-${Date.now()}.txt`,
       }).catch(() => {
         // Saving is best-effort; a failure here must not break the app
         // (graceful degradation, HIGH RISK 4.3).
