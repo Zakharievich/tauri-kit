@@ -202,3 +202,113 @@ degradation).
    `useSettingsStore`).
 3. **Пакетный менеджер** — pnpm везде: фронтенд, `src-tauri` (через
    tauri-cli), `server/`. Единый lockfile-подход упрощает CI.
+4. **`<LiveKitRoom>` вместо ручного `Room`** — используем высокоуровневый
+   компонент `<LiveKitRoom>` из `@livekit/components-react`: он сам управляет
+   жизненным циклом соединения, переподключением и cleanup. Ручное создание
+   `livekit-client` `Room` — только если позже понадобится нестандартное
+   поведение, не покрываемое компонентом.
+5. **Чат — встроенный `useChat`** — используем `useChat` из
+   `@livekit/components-react` поверх стандартного топика DataChannel
+   (`lk-chat-topic`), а не собственную реализацию поверх `publishData`.
+6. **Топики DataChannel закреплены** (см. раздел 7).
+
+---
+
+## 7. Фронтенд: компоненты и хуки для видеозвонков
+
+### 7.1 Общие типы — `src/types/`
+- `TokenRequest { identity, roomName }`, `TokenResponse { token, wsUrl }` —
+  соответствуют контракту token server (`POST /token`).
+- `TranscriptSegment { participantId, participantName, text, timestamp }`.
+- `TranscriptFinalPayload { segments: TranscriptSegment[], summary?: string }`
+  — формат сообщения в топике `transcript_final`.
+- `TranscriptLivePayload { participantId, text, isFinal }` — формат
+  сообщения в топике `transcript_live` (опционально, добавляется позже).
+- `SessionConfig { serverUrl, roomName, identity, e2eeKey?, transcriptionEnabled }`.
+
+### 7.2 Топики DataChannel (зафиксировано)
+| Топик              | Назначение                                             | Кто публикует | Кто потребляет |
+|--------------------|---------------------------------------------------------|---------------|-----------------|
+| `lk-chat-topic`    | Встроенный чат (стандартный топик `useChat`)            | Участники     | `useChat` (автоматически) |
+| `transcript_final` | Финальный транскрипт + опциональное саммари по итогу звонка | Python-агент  | `hooks/useTranscription.ts` |
+| `transcript_live`  | (опционально, MVP+) стриминг субтитров в реальном времени | Python-агент  | `hooks/useTranscription.ts` |
+
+`transcript_live` не реализуется в первой итерации — зарезервирован, чтобы
+не потребовалось менять протокол при добавлении live-субтитров.
+
+### 7.3 Модули
+
+**`services/tokenService.ts`** — единственная точка общения с token server.
+- `requestToken(serverUrl, { identity, roomName }): Promise<TokenResponse>` —
+  `POST {serverUrl}/token`, типизированные ошибки (сеть/400/500). Токен не
+  логируется и не кэшируется (HIGH RISK 4.1).
+
+**`services/e2eeService.ts`** — инкапсуляция `ExternalE2EEKeyProvider` из
+`livekit-client`.
+- `createE2EEOptions(key: string): RoomOptions['e2ee'] | undefined` — при
+  пустом ключе возвращает `undefined` (E2EE выключен). Ключ передаётся в
+  `keyProvider.setKey(key)`, никогда не уходит на сервер и не логируется
+  (HIGH RISK 4.2).
+
+**`hooks/useLiveKitRoom.ts`** — тонкая обвязка вокруг `<LiveKitRoom>`:
+готовит `token`/`serverUrl` (через `tokenService`) и `RoomOptions` (через
+`e2eeService`) до монтирования `<LiveKitRoom>`; синхронизирует
+connection-state в `useRoomStore` через колбэки `onConnected`/
+`onDisconnected`/`onError` компонента `<LiveKitRoom>`.
+
+**`hooks/useTranscription.ts`** — приём транскрипта, **graceful**.
+- Подписка на `RoomEvent.DataReceived` с фильтром по топикам
+  `transcript_final` (и опционально `transcript_live`), парсинг payload.
+- Если агент не подключён — событий не будет, хук просто возвращает пустое
+  состояние без ошибок (`{ segments: [], summary: undefined, isActive: false }`)
+  (HIGH RISK 4.3). Активен только когда `transcriptionEnabled` (взаимоисключён
+  с E2EE).
+- Результат складывается в `useTranscriptStore`.
+
+**`components/Room/`** — `RoomView.tsx` (grid-раскладка участников,
+использует `useTracks`/`useParticipants` из `@livekit/components-react`),
+`ParticipantTile.tsx` (обёртка над `<ParticipantTile>`/`VideoTrack`/
+`AudioTrack`, индикаторы mute/speaking).
+
+**`components/ScreenShare/`** — `ScreenShareView.tsx` (рендер трека
+`Track.Source.ScreenShare`), `useScreenShare.ts` (локальный хук:
+`localParticipant.setScreenShareEnabled`, обработка отмены системного
+диалога). Совместимость со screen-share при E2EE проверяется отдельно на
+этапе реализации (HIGH RISK 4.2).
+
+**`components/Chat/`** — `ChatPanel.tsx`, построен поверх `useChat()` из
+`@livekit/components-react` (топик `lk-chat-topic` из коробки); сообщения
+дублируются в `useChatStore` для UI-состояния (непрочитанные и т.п.).
+
+**`components/Controls/`** — `ControlBar.tsx`: mute mic, toggle camera,
+screen share, leave. Реализуется на базе примитивов
+`@livekit/components-react` (`TrackToggle` и т.п.), обёрнутых в наш UI;
+компонент не содержит бизнес-логики, только вызовы хуков/методов
+`localParticipant`.
+
+**`pages/JoinPage.tsx`** — форма: `serverUrl`, `roomName`, `identity`,
+поле E2EE-ключа + два взаимоисключающих toggle (E2EE ⇄ Transcription,
+решение 6.1/4.3.). Состояние — `useSettingsStore`.
+
+**`pages/RoomPage.tsx`** — оборачивает контент в `<LiveKitRoom>` с
+опциями из `useLiveKitRoom`; внутри — `Room/`, `ScreenShare/`, `Chat/`,
+`Controls/`; активирует `useTranscription`, если включена транскрипция.
+При выходе (`leave`) — переход на `TranscriptPage`.
+
+**`pages/TranscriptPage.tsx`** — показывает `useTranscriptStore`
+(сегменты + саммари, если пришли по `transcript_final`). Пустой стейт, если
+транскрипта нет (агент отсутствовал / был включён E2EE). Кнопка «Сохранить
+.txt» вызывает Tauri-команду `save_transcript` через `services/tauri-ipc`
+(строго локально, сервер/агент копию не хранят — HIGH RISK 4.3).
+
+### 7.4 Поток данных (кратко)
+```
+JoinPage → useSettingsStore (serverUrl, roomName, identity, e2eeKey, transcriptionEnabled)
+        → RoomPage
+             → <LiveKitRoom> (token из tokenService, e2ee-опции из e2eeService)
+             → Room/ ScreenShare/ Chat/ (useChat, топик lk-chat-topic) / Controls/
+             → useTranscription (топики transcript_final / transcript_live, graceful)
+        → leave → TranscriptPage → tauri-ipc save_transcript (.txt локально)
+```
+
+
