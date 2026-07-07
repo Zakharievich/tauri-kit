@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { JoinPage } from "./pages/JoinPage";
 import { RoomPage } from "./pages/RoomPage";
+import { TranscriptPage } from "./pages/TranscriptPage";
 import "./App.css";
 
 function App() {
@@ -8,9 +9,11 @@ function App() {
     <Routes>
       <Route path="/" element={<JoinPage />} />
       <Route path="/room" element={<RoomPage />} />
+      <Route path="/transcript" element={<TranscriptPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
+
 
 export default App;

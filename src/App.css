@@ -154,6 +154,37 @@ button {
   gap: 0.5em;
 }
 
+.transcript-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2em 1em;
+  text-align: left;
+}
+
+.transcript-page__body pre,
+.transcript-page__summary pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background-color: rgba(0, 0, 0, 0.04);
+  padding: 1em;
+  border-radius: 8px;
+}
+
+.transcript-page__summary {
+  margin-top: 1.5em;
+}
+
+.transcript-page__actions {
+  display: flex;
+  gap: 0.5em;
+  margin-top: 1.5em;
+}
+
+.transcript-page__error {
+  color: #d33;
+}
+
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

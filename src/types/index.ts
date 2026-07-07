@@ -15,3 +15,22 @@ export type SessionConfig = {
   e2eeKey?: string;
   transcriptionEnabled: boolean;
 };
+
+/** A single utterance produced by the optional STT agent. */
+export type TranscriptSegment = {
+  participantId: string;
+  participantName?: string;
+  text: string;
+  timestamp: number;
+};
+
+/**
+ * Payload published by the optional Python agent on the `transcript_final`
+ * DataChannel topic once a call ends. `summary` is present only when
+ * `ENABLE_SUMMARY=true` on the agent (see docs/PLAN.md section 5).
+ */
+export type TranscriptFinalPayload = {
+  segments: TranscriptSegment[];
+  summary?: string;
+};
+
