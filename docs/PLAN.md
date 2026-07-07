@@ -304,11 +304,84 @@ screen share, leave. Реализуется на базе примитивов
 ### 7.4 Поток данных (кратко)
 ```
 JoinPage → useSettingsStore (serverUrl, roomName, identity, e2eeKey, transcriptionEnabled)
-        → RoomPage
-             → <LiveKitRoom> (token из tokenService, e2ee-опции из e2eeService)
-             → Room/ ScreenShare/ Chat/ (useChat, топик lk-chat-topic) / Controls/
-             → useTranscription (топики transcript_final / transcript_live, graceful)
-        → leave → TranscriptPage → tauri-ipc save_transcript (.txt локально)
+         → RoomPage
+              → <LiveKitRoom> (token из tokenService, e2ee-опции из e2eeService)
+              → Room/ ScreenShare/ Chat/ (useChat, топик lk-chat-topic) / Controls/
+              → useTranscription (топики transcript_final / transcript_live, graceful)
+         → leave → TranscriptPage → tauri-ipc save_transcript (.txt локально)
 ```
+
+---
+
+## 8. Token server (детальная спецификация) — реализовано
+
+Статус: **реализовано** (Этап 1). Room lifecycle из раздела 1/2 сознательно
+**отложен** как отдельная задача — текущий сервер отвечает только за выдачу
+токенов.
+
+### 8.1 Стек
+Node.js + TypeScript (ESM) · Fastify · `livekit-server-sdk` · `zod` ·
+`dotenv` · `@fastify/cors` · Vitest.
+
+### 8.2 Структура
+```
+server/
+├─ src/
+│  ├─ index.ts          # Fastify-сервер, CORS (ALLOWED_ORIGIN), POST /token, GET /health
+│  ├─ tokenService.ts   # createAccessToken({ identity, roomName }) → { token, wsUrl }
+│  ├─ config.ts         # dotenv + zod-валидация env (fail-fast)
+│  └─ .env.example
+├─ tests/
+│  └─ tokenService.test.ts
+└─ package.json
+```
+Примечание: фактическая структура плоская (`src/*.ts`), без вложенных
+`routes/`/`services/`/`config/` из раздела 1 — осознанное упрощение, пока
+сервер выполняет одну функцию (выдача токена).
+
+### 8.3 Переменные окружения (`.env.example`)
+- `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_URL` — обязательные.
+- `ALLOWED_ORIGIN` — origin для CORS (default `http://localhost:1420`).
+- `PORT` — default `3001`.
+- `TOKEN_TTL_SECONDS` — default `3600` (1 час, HIGH RISK 4.1).
+
+### 8.4 Ответственность модулей
+- **`config.ts`** — загрузка `.env`, zod-схема, типизированный экспорт
+  конфига; падение с понятной ошибкой при невалидной конфигурации; секреты
+  не логируются.
+- **`tokenService.ts`** — чистая функция генерации: `AccessToken` с
+  `identity`, `ttl` = 1 час, `VideoGrant` (`roomJoin`, `room`, `canPublish`,
+  `canSubscribe`); возвращает `{ token, wsUrl }`; без хранения состояния,
+  без логирования значения токена.
+- **`index.ts`** — Fastify, `@fastify/cors` с `ALLOWED_ORIGIN`,
+  `POST /token` с валидацией тела (непустые `identity`/`roomName`) → 400 при
+  ошибке, 500 на внутренние; `GET /health`.
+
+### 8.5 Тесты (`tests/tokenService.test.ts`, Vitest)
+1. Генерация валидного JWT (3 сегмента) + корректный `wsUrl`.
+2. Claims: `sub` = identity, `video.room`, `roomJoin`/`canPublish`/
+   `canSubscribe: true`.
+3. TTL — ровно `TOKEN_TTL_SECONDS`. Проверяется как `exp - nbf`: у
+   `livekit-server-sdk` нет отдельного `iat`, время выпуска зафиксировано в
+   `nbf`.
+4. Отклонение пустых `identity`/`roomName` (ошибка, а не тихий проход).
+
+Фиктивные ключи используются только в тестах, реальные — исключительно в
+`.env` (см. раздел 4.5).
+
+### 8.6 `package.json`
+- deps: `fastify`, `@fastify/cors`, `livekit-server-sdk`, `zod`, `dotenv`.
+- devDeps: `typescript`, `vitest`, `@types/node`, `tsx`.
+- scripts: `dev` (tsx watch), `build` (tsc), `start` (node dist), `test`
+  (vitest run), `lint` (eslint).
+
+### 8.7 Проверено при реализации
+- `server/.env` присутствует в `.gitignore` (HIGH RISK 4.5).
+- `server` подключён как workspace в `pnpm-workspace.yaml`.
+
+### 8.8 Отложено
+- **Room lifecycle** (создание/закрытие комнат, room manager) — отдельная
+  будущая задача, не блокирует текущий функционал звонков.
+
 
 
