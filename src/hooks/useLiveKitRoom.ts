@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { RoomOptions } from "livekit-client";
-import { ExternalE2EEKeyProvider } from "livekit-client";
 import { requestToken, TokenServiceError } from "../services/tokenService";
+import { createE2EEOptions } from "../services/e2eeService";
 import type { SessionConfig } from "../types";
 
 export type UseLiveKitRoomState = {
@@ -64,16 +64,9 @@ export function useLiveKitRoom(config: SessionConfig | null): UseLiveKitRoomStat
     };
   }, [config]);
 
-  const roomOptions: RoomOptions = {};
-
-  if (config?.e2eeKey) {
-    const keyProvider = new ExternalE2EEKeyProvider();
-    void keyProvider.setKey(config.e2eeKey);
-    roomOptions.e2ee = {
-      keyProvider,
-      worker: new Worker(new URL("livekit-client/e2ee-worker", import.meta.url)),
-    };
-  }
+  const roomOptions: RoomOptions = {
+    e2ee: createE2EEOptions(config?.e2eeKey),
+  };
 
   return { token, serverUrl, roomOptions, isLoading, error };
 }
