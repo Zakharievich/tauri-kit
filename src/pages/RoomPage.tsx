@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { LiveKitRoom, VideoConference } from "@livekit/components-react";
+import { LiveKitRoom } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { useLiveKitRoom } from "../hooks/useLiveKitRoom";
 import { ControlBar } from "../components/Controls";
+import { RoomView } from "../components/Room";
+import { ChatPanel } from "../components/Chat";
 import type { SessionConfig } from "../types";
 
 /**
@@ -14,6 +17,7 @@ export function RoomPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const config = (location.state as SessionConfig | null) ?? null;
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const { token, serverUrl, roomOptions, isLoading, error } = useLiveKitRoom(config);
 
@@ -46,10 +50,13 @@ export function RoomPage() {
       connect
       onDisconnected={handleLeave}
       data-lk-theme="default"
-      style={{ height: "100vh" }}
+      style={{ height: "100vh", display: "flex" }}
     >
-      <VideoConference />
-      <ControlBar onLeave={handleLeave} />
+      <div className="room-page__main">
+        <RoomView />
+        <ControlBar onLeave={handleLeave} onToggleChat={() => setIsChatOpen((open) => !open)} />
+      </div>
+      {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
     </LiveKitRoom>
   );
 }
