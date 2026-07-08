@@ -82,6 +82,7 @@ cat .env
 1.6.2 Поднимаем LiveKit + token-server:
 ```bash
 docker compose pull
+docker build --network host -f server/Dockerfile -t tauri-kit-token-server .
 docker compose up -d
 ```
 
