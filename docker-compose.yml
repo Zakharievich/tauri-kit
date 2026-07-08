@@ -11,8 +11,6 @@ services:
 
   token-server:
     build:
-      image: tauri-kit-token-server
-      network_mode: host
       context: .
       dockerfile: server/Dockerfile
     working_dir: ./server
