@@ -44,7 +44,7 @@ async function main() {
   const app = buildServer(config);
 
   try {
-    await app.listen({ port: config.port, host: '0.0.0.0' });
+    await app.listen({ port: 3001, host: '0.0.0.0' });
   } catch (error) {
     app.log.error(error);
     process.exit(1);
