@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: server/Dockerfile
     working_dir: /repo/server/
-    command: pnpm start
+    command: --dev --bind 0.0.0.0 && pnpm start
     ports:
       - "3001:3001"
     environment:
