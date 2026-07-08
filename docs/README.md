@@ -195,12 +195,7 @@ macOS: src-tauri/target/release/bundle/dmg/*.dmg (для дистрибуции 
 
 
 ## Проверка работоспособности
-1.10.1 посмотреть логи:
 ```bash
 docker compose logs -f livekit
-```
-
-1.10.2 убедиться что token-server отвечает:
-```bash
-curl http://localhost:3001/health
+docker compose logs -f token-server
 ```
