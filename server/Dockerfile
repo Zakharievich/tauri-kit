@@ -8,10 +8,14 @@ WORKDIR /app
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY server/package.json ./server/package.json
 
-COPY . .
+RUN pnpm install --frozen-lockfile --filter ./server... --prod
+
+COPY server ./server
+
+WORKDIR /app/server
 
 EXPOSE 3001
 
