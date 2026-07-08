@@ -13,7 +13,7 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    working_dir: /tauri-kit/server/
+    working_dir: /repo/server/
     command: pnpm start
     environment:
       - PORT=${TOKEN_SERVER_PORT}
