@@ -16,6 +16,8 @@ services:
     working_dir: /repo/server/
     command: pnpm start
     network_mode: host
+    ports:
+      - "3001:3001"
     environment:
       - PORT= "3001"
       - LIVEKIT_URL=${LIVEKIT_URL}
