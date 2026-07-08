@@ -15,10 +15,9 @@ services:
       dockerfile: server/Dockerfile
     working_dir: /repo/server/
     command: pnpm start
-    ports:
-      - "3001:3001"
+    network_mode: host
     environment:
-      - PORT=${TOKEN_SERVER_PORT}
+      - PORT= "3001"
       - LIVEKIT_URL=${LIVEKIT_URL}
       - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
       - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
