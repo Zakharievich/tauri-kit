@@ -18,11 +18,12 @@
 
 Порты, которые должны быть открыты наружу:
 
-Компонент         --  Порт/диапазон -- Протокол
-LiveKit API/WS    --       7880     --   TCP
-LiveKit RTC (TCP) --       7881	    --   TCP
-LiveKit RTC (UDP)	--   50000–50100  --   UDP
-Token‑server	    --       3001	    --   TCP
+| Компонент         | Порт/диапазон | Протокол |
+| ----------------- | ------------- | -------- |
+| LiveKit API/WS    | 7880          | TCP      |
+| LiveKit RTC (TCP) | 7881          | TCP      |
+| LiveKit RTC (UDP) | 50000–50100   | UDP      |
+| Token‑server      | 3001          | TCP      |
 
 Порты 8000 (faster‑whisper) и 11434 (Ollama) оставляются
 только для локального доступа — агент обращается к ним по localhost.
