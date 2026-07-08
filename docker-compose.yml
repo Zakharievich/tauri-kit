@@ -13,7 +13,7 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    working_dir: ./server
+    working_dir: /server
     command: pnpm start
     environment:
       - PORT=${TOKEN_SERVER_PORT}
