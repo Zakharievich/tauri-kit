@@ -65,6 +65,7 @@ cd tauri-kit
 
 1.6.1 Запуск стека. Генерируем ключи и создаём .env :
 ```bash
+chmod +x ./init-livekit.sh
 ./init-livekit.sh
 ```
 
