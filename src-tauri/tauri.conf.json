@@ -5,7 +5,7 @@
   "identifier": "com.vottakvot.tauri-kit",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "${LIVEKIT_URL}",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
