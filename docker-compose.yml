@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  livekit:
+    image: livekit/livekit-server:latest
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "7880:7880"                       # LiveKit API/WS
+      - "7881:7881"                       # RTC TCP
+      - "50000-50100:50000-50100/udp"    # RTC UDP
+    environment:
+      - LIVEKIT_KEYS=${LIVEKIT_API_KEY}:${LIVEKIT_API_SECRET}
+
+  token-server:
+    build:
+      context: ./server
+    working_dir: /app
+    command: pnpm start
+    environment:
+      - PORT=${TOKEN_SERVER_PORT}
+      - LIVEKIT_URL=${LIVEKIT_URL}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}
+    ports:
+      - "${TOKEN_SERVER_PORT}:${TOKEN_SERVER_PORT}"
