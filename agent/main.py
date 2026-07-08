@@ -83,26 +83,35 @@ async def _run_session(ctx: JobContext, config: AgentConfig) -> None:
     ) -> None:
         _subscribe_track(track, participant)
 
+    shutdown_event = asyncio.Event()
+
+    async def _on_shutdown(reason: str) -> None:  # noqa: ARG001 - required by callback signature
+        shutdown_event.set()
+
+    ctx.add_shutdown_callback(_on_shutdown)
+
     try:
         await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
         logger.info("Agent connected to room %s as %s", ctx.room.name, AGENT_IDENTITY)
 
         # Runs until the job is torn down (last participant left / room closed).
-        await ctx.wait_for_shutdown()
+        # `JobContext` has no `wait_for_shutdown()`; shutdown is signalled via
+        # `add_shutdown_callback`, so we wait on an event set by that callback.
+        await shutdown_event.wait()
     finally:
         await transcriber.flush_all()
+
         transcript_text = transcriber.get_transcript_text() or build_document(
             transcriber.segments
         )
 
         summary_text = await summarize(
             transcript_text,
-            {
-                "ENABLE_SUMMARY": config.enable_summary,
-                "OLLAMA_URL": config.ollama_url,
-                "OLLAMA_MODEL": config.ollama_model,
-            },
+            ollama_url=config.ollama_url,
+            ollama_model=config.ollama_model,
+            enabled=config.enable_summary,
         )
+
 
         await publish_final(ctx.room, transcript_text, summary_text)
         await transcriber.aclose()

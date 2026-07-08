@@ -48,7 +48,42 @@ jobs:
       - name: Test
         run: pnpm test
 
+  lint-and-test-server:
+    name: Lint & Test Token Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check / build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
   test-rust:
+
     name: Test & Lint Rust
     runs-on: ubuntu-latest
     steps:
@@ -73,10 +108,38 @@ jobs:
         working-directory: src-tauri
         run: cargo clippy -- -D warnings
 
+  lint-agent:
+    name: Lint Python Agent (optional component)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install ruff
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Byte-compile check
+        run: python -m py_compile main.py transcriber.py summarizer.py exporter.py
+
   build-tauri:
+
     name: Build Tauri App
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [lint-and-test-frontend, test-rust]
+    needs: [lint-and-test-frontend, lint-and-test-server, test-rust]
+
     strategy:
       fail-fast: false
       matrix:

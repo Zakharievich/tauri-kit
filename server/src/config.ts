@@ -33,6 +33,18 @@ function parseEnv(env: NodeJS.ProcessEnv): AppConfig {
 
   const data = result.data;
 
+  const isProduction = env.NODE_ENV === 'production';
+  const usesDevCredentials =
+    data.LIVEKIT_API_KEY === 'devkey' || data.LIVEKIT_API_SECRET === 'devsecret';
+
+  if (isProduction && usesDevCredentials) {
+    throw new Error(
+      'Invalid environment configuration: LIVEKIT_API_KEY/LIVEKIT_API_SECRET use the ' +
+        'well-known LiveKit dev defaults ("devkey"/"devsecret") — refusing to start with ' +
+        'these credentials when NODE_ENV=production. Generate dedicated production keys.',
+    );
+  }
+
   return {
     livekitApiKey: data.LIVEKIT_API_KEY,
     livekitApiSecret: data.LIVEKIT_API_SECRET,
@@ -42,6 +54,7 @@ function parseEnv(env: NodeJS.ProcessEnv): AppConfig {
     tokenTtlSeconds: data.TOKEN_TTL_SECONDS,
   };
 }
+
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return parseEnv(env);

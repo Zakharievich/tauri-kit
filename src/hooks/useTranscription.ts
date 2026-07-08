@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { RoomEvent } from "livekit-client";
 import { useMaybeRoomContext } from "@livekit/components-react";
-import { invoke } from "@tauri-apps/api/core";
+import { saveTranscript } from "../services/tauriCommands";
 import type { AnyAgentMessage } from "../types";
+
 
 /** DataChannel topic the optional Python agent publishes the final transcript on (docs/PLAN.md §7.2). */
 const TRANSCRIPT_FINAL_TYPE = "transcript_final";
@@ -66,13 +67,14 @@ export function useTranscription(enabled = true): UseTranscriptionState {
       const formatted = formatTranscriptText(transcript, summary);
       setText(formatted);
 
-      invoke("save_transcript", {
+      saveTranscript({
         transcriptContent: formatted,
         filename: `transcript-${Date.now()}.txt`,
       }).catch(() => {
         // Saving is best-effort; a failure here must not break the app
         // (graceful degradation, HIGH RISK 4.3).
       });
+
     }
 
     room.on(RoomEvent.DataReceived, handleDataReceived);
