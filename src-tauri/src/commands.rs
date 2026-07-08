@@ -31,6 +31,7 @@ fn write_transcript_to_dir(dir: &std::path::Path, filename: &str, transcript_con
 /// Returns a stringified error if the Documents directory cannot be
 /// resolved or the file cannot be written.
 #[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
 pub fn save_transcript(app: tauri::AppHandle, transcript_content: String, filename: String) -> Result<String, String> {
     let dir = app
         .path()
