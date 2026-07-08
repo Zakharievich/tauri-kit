@@ -68,6 +68,8 @@ cd tauri-kit
 ./init-livekit.sh
 ```
 
+Сгенерированные значение LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL и TOKEN_SERVER_PORT будут использованы из .env дальше при вызове docker compose.
+
 1.6.1 Поднимаем LiveKit + token-server:
 ```bash
 docker compose pull
