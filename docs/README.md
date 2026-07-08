@@ -64,19 +64,18 @@ git clone https://github.com/Zakharievich/tauri-kit.git
 cd tauri-kit
 ```
 
-1.6 Запуск стека.
-1.6.1 Генерируем ключи и создаём .env :
+1.6 Запуск стека. Генерируем ключи и создаём .env :
 ```bash
 ./init-livekit.sh
 ```
 
-1.6.2 Поднимаем LiveKit + token-server:
+1.6.1 Поднимаем LiveKit + token-server:
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-1.6.3 Проверяем:
+1.6.2 Проверяем:
 ```bash
 docker compose ps
 ```
