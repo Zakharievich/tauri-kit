@@ -108,16 +108,17 @@ uvicorn faster_whisper_server.app:app --port 8000
 
 1.7.3 Настройка agent/.env :
 
-Переменная	         -- Обязательна --	                Значение
-LIVEKIT_URL          --	    да	    -- совпадает с LIVEKIT_URL из корневого .env
-LIVEKIT_API_KEY	да   --	    да      -- совпадает с LIVEKIT_API_KEY из корневого .env
-LIVEKIT_API_SECRET   --	    да	    -- совпадает с LIVEKIT_API_SECRET из корневого .env
-ENABLE_STT	         --     нет	    -- (true)	при false агент не подключается к комнате
-FASTER_WHISPER_URL	 --     нет	    -- по умолчанию http://localhost:8000/v1
-FASTER_WHISPER_MODEL --	    нет	    -- по умолчанию tiny; при плохом звуке — small
-ENABLE_SUMMARY	     --     нет	    -- (true)	запрос саммари в Ollama по завершении сессии
-OLLAMA_URL	         --     нет	    -- по умолчанию http://localhost:11434
-OLLAMA_MODEL	       --     нет	    -- по умолчанию qwen2.5:0.5b
+| Переменная           | Обязательна | Значение                                         |
+| -------------------- | ----------- | ------------------------------------------------ |
+| LIVEKIT_URL          | да          | совпадает с LIVEKIT_URL из корневого .env        |
+| LIVEKIT_API_KEY      | да          | совпадает с LIVEKIT_API_KEY из корневого .env    |
+| LIVEKIT_API_SECRET   | да          | совпадает с LIVEKIT_API_SECRET из корневого .env |
+| ENABLE_STT           | нет (true)  | при false агент не подключается к комнате        |
+| FASTER_WHISPER_URL   | нет         | по умолчанию http://localhost:8000/v1            |
+| FASTER_WHISPER_MODEL | нет         | по умолчанию tiny; при плохом звуке — small      |
+| ENABLE_SUMMARY       | нет (true)  | запрос саммари в Ollama по завершении сессии     |
+| OLLAMA_URL           | нет         | по умолчанию http://localhost:11434              |
+| OLLAMA_MODEL         | нет         | по умолчанию qwen2.5:0.5b                        |
 
 1.7.4 Запуск агента:
 ```bash
