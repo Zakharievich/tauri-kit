@@ -11,7 +11,8 @@ services:
 
   token-server:
     build:
-      context: ./server
+      context: .
+      dockerfile: server/Dockerfile
     working_dir: /app
     command: pnpm start
     environment:
