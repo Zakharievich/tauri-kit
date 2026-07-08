@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: server/Dockerfile
     working_dir: /repo/server/
-    command: sh -lc "pnpm build && pnpm start"
+    command: pnpm start
     environment:
       - PORT=${TOKEN_SERVER_PORT}
       - LIVEKIT_URL=${LIVEKIT_URL}
