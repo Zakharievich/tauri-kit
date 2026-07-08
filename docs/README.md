@@ -155,7 +155,9 @@ pnpm tauri build
 
 ## Артефакты:
 Windows: src-tauri/target/release/bundle/msi/*.msi и .../nsis/*.exe
+
 Linux: src-tauri/target/release/bundle/appimage/*.AppImage
+
 macOS: src-tauri/target/release/bundle/dmg/*.dmg (для дистрибуции за пределами своей машины потребуется подпись Apple)
 
 1.9 Использование клиента.
