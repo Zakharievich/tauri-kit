@@ -182,3 +182,15 @@ macOS: src-tauri/target/release/bundle/dmg/*.dmg (для дистрибуции 
 1.9.6 Кнопка "Присоединиться" — Клиент отправляет POST {Server URL}/token с телом { identity, roomName } и получает { token, wsUrl } для подключения к LiveKit.
 
 1.9.7 Кнопка "Сохранить .txt" — появляется по завершению сессии и сохраняет транскрипт в директорию Documents через Tauri‑команду save_transcript; возвращает абсолютный путь к файлу.
+
+
+## Проверка работоспособности
+1.10.1 посмотреть логи:
+```bash
+docker compose logs -f livekit
+```
+
+1.10.2 убедиться что token-server отвечает:
+```bash
+curl http://localhost:3001/health
+```
