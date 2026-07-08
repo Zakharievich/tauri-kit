@@ -15,7 +15,6 @@ services:
       dockerfile: server/Dockerfile
     working_dir: /repo/server/
     command: pnpm start
-    network_mode: host
     ports:
       - "3001:3001"
     environment:
