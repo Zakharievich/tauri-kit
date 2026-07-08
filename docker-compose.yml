@@ -11,9 +11,11 @@ services:
 
   token-server:
     build:
+      image: tauri-kit-token-server
+      network_mode: host
       context: .
       dockerfile: server/Dockerfile
-    working_dir: ./
+    working_dir: ./server
     command: pnpm start
     environment:
       - PORT=${TOKEN_SERVER_PORT}
