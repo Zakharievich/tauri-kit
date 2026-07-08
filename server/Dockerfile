@@ -6,12 +6,13 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 WORKDIR /repo
 
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY server ./server
 
 RUN pnpm install --no-frozen-lockfile
+
 WORKDIR /repo/server
 RUN pnpm build
 
