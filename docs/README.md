@@ -29,22 +29,22 @@
 только для локального доступа — агент обращается к ним по localhost.
 
 ## Установка зависимостей
-1.1 Вход на сервер уже должен быть уже реализован по SSH.
+1.1.1 Вход на сервер уже должен быть уже реализован по SSH.
 Обновляем систему, устанавливаем базовые инструменты:
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y curl git ufw
 ```
 
-1.2 Установка Docker Engine:
+1.2.1 Установка Docker Engine:
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER
 ```
 
-1.3 После этого перелогиниваемся по SSH.
+1.3.1 После этого перелогиниваемся по SSH.
 
-1.4 Открываем нужные порты:
+1.4.1 Открываем нужные порты:
 ```bash
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
@@ -57,26 +57,26 @@ sudo ufw enable
 sudo ufw status
 ```
 
-1.5 Клонирование репозитория:
+1.5.1 Клонирование репозитория:
 ```bash
 git clone https://github.com/Zakharievich/tauri-kit.git
 cd tauri-kit
 ```
 
-1.6 Запуск стека. Генерируем ключи и создаём .env :
+1.6.1 Запуск стека. Генерируем ключи и создаём .env :
 ```bash
 ./init-livekit.sh
 ```
 
 Сгенерированные значение LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL и TOKEN_SERVER_PORT будут использованы из .env дальше при вызове docker compose.
 
-1.6.1 Поднимаем LiveKit + token-server:
+1.6.2 Поднимаем LiveKit + token-server:
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-1.6.2 Проверяем:
+1.6.3 Проверяем:
 ```bash
 docker compose ps
 ```
