@@ -33,6 +33,7 @@
 Обновляем систему, устанавливаем базовые инструменты:
 ```bash
 sudo apt update && sudo apt upgrade -y
+apt --purge remove -y xinetd nis yp-tools tftpd atftpd tftpd-hpa telnetd rsh-server rsh-redone-server
 sudo apt install -y curl git ufw
 ```
 
@@ -46,19 +47,24 @@ sudo usermod -aG docker $USER
 
 1.4.1 Открываем нужные порты:
 ```bash
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
 sudo ufw allow 22/tcp          # SSH
 sudo ufw allow 7880/tcp        # LiveKit API/WS
 sudo ufw allow 7881/tcp        # RTC TCP
 sudo ufw allow 50000:50100/udp # RTC UDP
 sudo ufw allow 3001/tcp        # token-server
+sudo ufw allow 80
+sudo ufw allow 443
+ufw default deny incoming
+ufw default allow outgoing
 sudo ufw enable
 sudo ufw status
 ```
 
 1.5.1 Клонирование репозитория:
 ```bash
+cd ~
+mkdir -p projects
+cd projects
 git clone https://github.com/Zakharievich/tauri-kit.git
 cd tauri-kit
 ```
