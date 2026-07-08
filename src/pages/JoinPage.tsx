@@ -10,10 +10,11 @@ const DEFAULT_SERVER_URL = "http://localhost:3001";
  * Join form: serverUrl, roomName, identity, E2EE key + two mutually
  * exclusive toggles (E2EE ⇄ Transcription). See docs/PLAN.md 4.3 / 7.3.
  *
- * Host flow: clicking "Generate key" creates a random E2EE key locally via
- * `crypto.getRandomValues()` (see e2eeService.generateE2EEKey) and displays
- * it so it can be copied and shared with participants out-of-band. The key
- * is never sent to the token server and never logged (HIGH RISK 4.2).
+ * Host flow: clicking "Сгенерировать секретный ключ" creates a random E2EE
+ * key locally via `crypto.getRandomValues()` (see e2eeService.generateE2EEKey)
+ * and displays it so it can be copied and shared with participants
+ * out-of-band. The key is never sent to the token server and never logged
+ * (HIGH RISK 4.2).
  */
 export function JoinPage() {
   const navigate = useNavigate();
@@ -79,10 +80,9 @@ export function JoinPage() {
 
   return (
     <main className="join-page">
-      <h1>Join a call</h1>
-      <form onSubmit={handleSubmit}>
-        <label>
-          Token server URL
+      <form className="join-page__form" onSubmit={handleSubmit}>
+        <label className="join-page__field">
+          <span className="join-page__label">URL сервера</span>
           <input
             value={serverUrl}
             onChange={(e) => setServerUrl(e.currentTarget.value)}
@@ -91,8 +91,8 @@ export function JoinPage() {
           />
         </label>
 
-        <label>
-          Room name
+        <label className="join-page__field">
+          <span className="join-page__label">Имя комнаты</span>
           <input
             value={roomName}
             onChange={(e) => setRoomName(e.currentTarget.value)}
@@ -101,8 +101,8 @@ export function JoinPage() {
           />
         </label>
 
-        <label>
-          Identity
+        <label className="join-page__field">
+          <span className="join-page__label">Ваше имя</span>
           <input
             value={identity}
             onChange={(e) => setIdentity(e.currentTarget.value)}
@@ -111,16 +111,16 @@ export function JoinPage() {
           />
         </label>
 
-        <fieldset>
-          <legend>Options</legend>
+        <fieldset className="join-page__options">
+          <legend>Опции</legend>
 
-          <label title="Транскрипция недоступна при включённом E2EE">
+          <label className="join-page__checkbox" title="Транскрипция недоступна при включённом шифровании">
             <input
               type="checkbox"
               checked={e2eeEnabled}
               onChange={(e) => handleToggleE2ee(e.currentTarget.checked)}
             />
-            End-to-end encryption
+            Шифрование
           </label>
 
           {e2eeEnabled && (
@@ -132,37 +132,37 @@ export function JoinPage() {
                   setE2eeKey(e.currentTarget.value);
                   setKeyCopied(false);
                 }}
-                placeholder="Paste E2EE key, or generate one as the host"
+                placeholder="Вставьте E2EE ключ"
                 autoComplete="off"
                 spellCheck={false}
               />
-              <button type="button" onClick={handleGenerateKey}>
-                Generate key (host)
-              </button>
-              {e2eeKey && (
-                <button type="button" onClick={() => void handleCopyKey()}>
-                  {keyCopied ? "Copied!" : "Copy"}
+              <div className="e2ee-key-field__buttons">
+                <button type="button" onClick={handleGenerateKey}>
+                  Сгенерировать секретный ключ
                 </button>
-              )}
-              <p className="e2ee-key-hint">
-                Share this key with participants out-of-band (chat, in person, etc.). It is never
-                sent to the server.
-              </p>
+                {e2eeKey && (
+                  <button type="button" onClick={() => void handleCopyKey()}>
+                    {keyCopied ? "Скопировано!" : "Копировать"}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          <label title="Транскрипция недоступна при включённом E2EE">
+          <label className="join-page__checkbox" title="Транскрипция недоступна при включённом шифровании">
             <input
               type="checkbox"
               checked={transcriptionEnabled}
               onChange={(e) => handleToggleTranscription(e.currentTarget.checked)}
               disabled={e2eeEnabled}
             />
-            Transcription
+            Транскрибация речи
           </label>
         </fieldset>
 
-        <button type="submit">Join</button>
+        <button type="submit" className="join-page__submit">
+          Присоединиться
+        </button>
       </form>
     </main>
   );

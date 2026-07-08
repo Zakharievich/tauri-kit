@@ -55,20 +55,30 @@ export function RoomPage() {
 
   if (!config) {
     return (
-      <main className="room-page">
-        <p>No session config found.</p>
-        <button onClick={() => navigate("/")}>Back to join page</button>
+      <main className="room-page room-page__status">
+        <p>Конфигурация сессии не найдена.</p>
+        <button onClick={() => navigate("/")}>Вернуться на главный экран</button>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="room-page room-page__status">
+        <p className="room-page__error">Ошибка: {error}</p>
+        <button onClick={() => navigate("/")}>Вернуться на главный экран</button>
       </main>
     );
   }
 
   if (isLoading || !token || !serverUrl) {
     return (
-      <main className="room-page">
-        <p>{error ? `Error: ${error}` : "Connecting…"}</p>
+      <main className="room-page room-page__status">
+        <p>Подключение…</p>
       </main>
     );
   }
+
 
   return (
     <LiveKitRoom
