@@ -72,8 +72,9 @@ cd tauri-kit
 1.6.1 Запуск стека. Генерируем ключи и создаём .env :
 ```bash
 chmod +x ./init-livekit.sh
-./init-livekit.sh
+bash ./init-livekit.sh
 ls -la .env   # проверяем создались ли ключи
+cat .env
 ```
 
 Сгенерированные значение LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL и TOKEN_SERVER_PORT будут использованы из .env дальше при вызове docker compose.
