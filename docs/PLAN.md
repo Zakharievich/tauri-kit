@@ -219,11 +219,17 @@ degradation).
 ### 7.1 Общие типы — `src/types/`
 - `TokenRequest { identity, roomName }`, `TokenResponse { token, wsUrl }` —
   соответствуют контракту token server (`POST /token`).
-- `TranscriptSegment { participantId, participantName, text, timestamp }`.
-- `TranscriptFinalPayload { segments: TranscriptSegment[], summary?: string }`
-  — формат сообщения в топике `transcript_final`.
-- `TranscriptLivePayload { participantId, text, isFinal }` — формат
-  сообщения в топике `transcript_live` (опционально, добавляется позже).
+- `AgentMessage<T> { type: string, version: number, payload: T }` — общая
+  обёртка всех сообщений, публикуемых Python-агентом по DataChannel
+  (зафиксировано, см. §7.2). Неизвестные `type` игнорируются потребителем —
+  это защищает от ошибок при будущем расширении протокола.
+- `TranscriptFinalPayload { transcript: string, summary: string }` —
+  `payload` для `AgentMessage` с `type: "transcript_final"`. `summary` — это
+  `""`, если `ENABLE_SUMMARY=false` на агенте либо Ollama была недоступна
+  (graceful degradation, HIGH RISK 4.3).
+- `TranscriptLivePayload { text: string }` — `payload` для `AgentMessage` с
+  `type: "transcript_live"` (зарезервировано, не реализуется в первой
+  итерации — см. §7.2).
 - `SessionConfig { serverUrl, roomName, identity, e2eeKey?, transcriptionEnabled }`.
 
 ### 7.2 Топики DataChannel (зафиксировано)
@@ -232,6 +238,29 @@ degradation).
 | `lk-chat-topic`    | Встроенный чат (стандартный топик `useChat`)            | Участники     | `useChat` (автоматически) |
 | `transcript_final` | Финальный транскрипт + опциональное саммари по итогу звонка | Python-агент  | `hooks/useTranscription.ts` |
 | `transcript_live`  | (опционально, MVP+) стриминг субтитров в реальном времени | Python-агент  | `hooks/useTranscription.ts` |
+
+**Формат сообщения (зафиксировано, общая обёртка для обоих топиков):**
+```json
+{
+  "type": "transcript_final",
+  "version": 1,
+  "payload": {
+    "transcript": "...",
+    "summary": "..."
+  }
+}
+```
+- `type` — строковый идентификатор, совпадает с именем топика
+  (`"transcript_final"` | `"transcript_live"`).
+- `version` — число, сейчас `1`; зарезервировано под обратную совместимость
+  при будущих изменениях формата `payload`.
+- `payload` для `transcript_final`: `{ transcript: string, summary: string }`
+  (`summary` — пустая строка, если саммари выключено или Ollama недоступна).
+- `payload` для `transcript_live`: `{ text: string }` — текущий сегмент в
+  реальном времени.
+- Потребитель (`hooks/useTranscription.ts`) обязан проверять `message.type`
+  перед обработкой и **игнорировать неизвестные типы** — защита от поломки
+  при будущем расширении протокола.
 
 `transcript_live` не реализуется в первой итерации — зарезервирован, чтобы
 не потребовалось менять протокол при добавлении live-субтитров.
@@ -382,6 +411,99 @@ server/
 ### 8.8 Отложено
 - **Room lifecycle** (создание/закрытие комнат, room manager) — отдельная
   будущая задача, не блокирует текущий функционал звонков.
+
+---
+
+## 9. Опциональный Python-агент (детальная спецификация)
+
+Статус: **реализуется** (Этап 6). Агент подключается к комнате только при
+условиях из раздела 5 (E2EE выключен, transcription-toggle включён).
+
+### 9.1 Стек
+Python 3 · `livekit-agents` · `livekit` · `python-dotenv` · `httpx` (async
+HTTP-клиент для faster-whisper-server и Ollama).
+
+### 9.2 Структура
+```
+agent/
+├─ main.py             # AgentServer entrypoint, чтение флагов, оркестрация
+├─ transcriber.py       # STT-логика (faster-whisper-server), накопление сегментов
+├─ summarizer.py        # запрос к Ollama, graceful fallback
+├─ exporter.py          # форматирование .txt + рассылка по DataChannel
+├─ requirements.txt
+├─ .env.example
+└─ README_AGENT.md
+```
+
+### 9.3 Переменные окружения (`.env.example`)
+- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` — подключение к SFU.
+- `ENABLE_STT` — default `true`; при `false` агент завершает работу с
+  предупреждением при старте, не подключаясь к комнате.
+- `FASTER_WHISPER_URL` — default `http://localhost:8000/v1` (OpenAI-совместимое
+  API faster-whisper-server).
+- `FASTER_WHISPER_MODEL` — default `tiny`.
+- `ENABLE_SUMMARY` — default `true`; управляет вызовом `summarizer.py`.
+- `OLLAMA_URL` — default `http://localhost:11434`.
+- `OLLAMA_MODEL` — default `qwen2.5:0.5b`.
+
+### 9.4 Ответственность модулей
+- **`main.py`** — единственная точка входа и оркестрации (SRP):
+  - загружает `.env`, проверяет `ENABLE_STT`; при `false` — `logger.warning`
+    и выход без подключения к комнате;
+  - `WorkerOptions`/`cli.run_app` из `livekit-agents`;
+  - `entrypoint(ctx)` подключает агента как **скрытого участника**:
+    `auto_subscribe=AudioOnly`, identity `agent-transcriber`, без публикации
+    собственных видео/аудио треков;
+  - подписывается на аудиотреки всех участников комнаты и передаёт кадры в
+    `Transcriber`;
+  - по завершении сессии (все участники вышли/комната закрылась) вызывает
+    `Exporter.build_document` → опционально `Summarizer.summarize` → 
+    `Exporter.publish_final`.
+- **`transcriber.py`** — `Transcriber`:
+  - буферизует аудио (VAD/оконная нарезка), шлёт чанки в
+    `POST {FASTER_WHISPER_URL}/audio/transcriptions` (`model=tiny`,
+    OpenAI-совместимый формат, `httpx`);
+  - хранит сегменты с меткой времени от начала сессии, формат
+    `[HH:MM:SS] текст сегмента`;
+  - `get_transcript_text()` → полный текст транскрипта (это `payload.transcript`);
+  - graceful: недоступность whisper-сервера → `logger.warning`, чанк
+    пропускается, работа агента продолжается (HIGH RISK 4.3).
+  - Не знает про Ollama и про DataChannel — изоляция ответственности.
+- **`summarizer.py`** — `summarize(transcript_text) -> str`:
+  - вызывается только при `ENABLE_SUMMARY=true`, иначе возвращает `""`;
+  - `POST {OLLAMA_URL}/api/generate`, `model={OLLAMA_MODEL}`, промпт на
+    саммари из 3–5 пунктов;
+  - при недоступности/таймауте Ollama — `logger.warning`, возврат `""`;
+    финальный документ уходит без саммари, агент не падает.
+- **`exporter.py`**:
+  - `build_document(segments) -> str` — итоговый текст транскрипта из строк
+    `[HH:MM:SS] текст`;
+  - `publish_final(room, transcript, summary)` — формирует сообщение по
+    зафиксированному контракту (см. §7.2):
+    `{ "type": "transcript_final", "version": 1, "payload": { "transcript": ..., "summary": summary or "" } }`,
+    сериализует в JSON → `room.local_participant.publish_data(reliable=True,
+    topic="transcript_final")`, рассылая всем участникам.
+
+### 9.5 Требования к ресурсам
+Whisper tiny (~1 GB RAM), Ollama qwen2.5:0.5b (~400 MB), CPU-only. Полностью
+опционально: отсутствие/сбой агента не блокирует звонок (graceful
+degradation, HIGH RISK 4.3).
+
+### 9.6 `requirements.txt`
+`livekit-agents`, `livekit`, `python-dotenv`, `httpx`.
+
+### 9.7 `README_AGENT.md`
+Описывает: назначение, требования к ресурсам, запуск (`.env` → `python
+main.py`), таблицу флагов и матрицу поведения (раздел 5), зафиксированный
+DataChannel-контракт (§7.2), явные заметки о graceful degradation и о
+несовместимости с включённым E2EE.
+
+### 9.8 Синхронизация с фронтендом
+`src/types/index.ts` и `src/hooks/useTranscription.ts` приведены к
+зафиксированному контракту `AgentMessage { type, version, payload }` (см.
+§7.1/7.2): хук проверяет `message.type === "transcript_final"`, игнорирует
+неизвестные `type`, берёт готовые `payload.transcript`/`payload.summary` без
+самостоятельного форматирования из сегментов.
 
 
 

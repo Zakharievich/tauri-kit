@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { RoomEvent } from "livekit-client";
 import { useMaybeRoomContext } from "@livekit/components-react";
 import { invoke } from "@tauri-apps/api/core";
-import type { TranscriptFinalPayload, TranscriptSegment } from "../types";
+import type { AnyAgentMessage } from "../types";
 
 /** DataChannel topic the optional Python agent publishes the final transcript on (docs/PLAN.md §7.2). */
-const TRANSCRIPT_TOPIC = "transcript_final";
+const TRANSCRIPT_FINAL_TYPE = "transcript_final";
 
 /** Marker appended before the optional summary block inside the saved/displayed text. */
 export const SUMMARY_MARKER = "=== САММАРИ ===";
@@ -15,19 +15,19 @@ export type UseTranscriptionState = {
   text: string | null;
 };
 
-function formatTranscriptText(payload: TranscriptFinalPayload): string {
-  const lines = payload.segments.map(
-    (segment: TranscriptSegment) => `[${segment.participantName ?? segment.participantId}] ${segment.text}`,
-  );
-  const body = lines.join("\n");
-  return payload.summary ? `${body}\n\n${SUMMARY_MARKER}\n${payload.summary}` : body;
+function formatTranscriptText(transcript: string, summary: string): string {
+  return summary ? `${transcript}\n\n${SUMMARY_MARKER}\n${summary}` : transcript;
 }
 
 /**
  * Subscribes to the `transcript_final` DataChannel topic published by the
- * optional Python STT agent (see docs/PLAN.md §7.2). Once a payload arrives
- * it is formatted into plain text and persisted locally via the
- * `save_transcript` Tauri command — never sent to any server.
+ * optional Python STT agent (see docs/PLAN.md §7.2). Messages follow the
+ * fixed `{ type, version, payload }` envelope — only `type ===
+ * "transcript_final"` is handled here, any other/unknown `type` is
+ * ignored (forward-compatible with future message kinds, e.g.
+ * `transcript_live`). Once a payload arrives it is formatted into plain
+ * text and persisted locally via the `save_transcript` Tauri command —
+ * never sent to any server.
  *
  * If the agent is not running (disabled, crashed, or transcription turned
  * off), no `dataReceived` event with this topic will ever fire, so the hook
@@ -45,19 +45,25 @@ export function useTranscription(enabled = true): UseTranscriptionState {
     }
 
     function handleDataReceived(payload: Uint8Array, _participant?: unknown, _kind?: unknown, topic?: string) {
-      if (topic !== TRANSCRIPT_TOPIC) {
+      if (topic !== TRANSCRIPT_FINAL_TYPE) {
         return;
       }
 
-      let parsed: TranscriptFinalPayload;
+      let message: AnyAgentMessage;
       try {
-        parsed = JSON.parse(decoderRef.current.decode(payload)) as TranscriptFinalPayload;
+        message = JSON.parse(decoderRef.current.decode(payload)) as AnyAgentMessage;
       } catch {
         // Malformed payload from the agent — ignore and stay graceful.
         return;
       }
 
-      const formatted = formatTranscriptText(parsed);
+      // Forward-compatible: only handle known message types, ignore the rest.
+      if (message.type !== TRANSCRIPT_FINAL_TYPE) {
+        return;
+      }
+
+      const { transcript, summary } = message.payload;
+      const formatted = formatTranscriptText(transcript, summary);
       setText(formatted);
 
       invoke("save_transcript", {
