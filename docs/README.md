@@ -101,6 +101,110 @@ sudo usermod -aG docker $USER
 docker --version && docker compose version
 ```
 
+Чтобы не ломалась bridge-сеть Docker - настроим systemd-networkd. По умолчанию в Ubuntu 24.04 правило Name=* + Type=ether применяло DHCP ко всем Ethernet-интерфейсам, включая Docker veth*.
+После установки Docker на таком VPS нужно было сделать следующее.
+
+## Проверить внешний интерфейс
+ip route get 1.1.1.1
+```
+например, интерфейс окажется — eth0.
+```
+## Убрать широкое правило networkd
+Сначала сохранить резервную копию:
+```bash
+sudo cp -a /etc/systemd/network/10-all.network \   /etc/systemd/network/10-all.network.bak
+```
+Затем отредактировать файл:
+```bash
+sudo nano /etc/systemd/network/10-all.network
+```
+Было неправильно:
+```
+[Match]
+  Name=* Type=ether 
+[Network]
+  DHCP=ipv4
+```
+Должно быть так — networkd обслуживает только сетевую карту VPS:
+```
+[Match]
+  Name=eth0
+[Network]
+  DHCP=ipv4
+```
+
+**Не использовать Name=* и Type=ether для DHCP на сервере с Docker: Docker создаёт виртуальные Ethernet-интерфейсы для контейнеров.**
+
+## Исключить интерфейсы Docker
+Это дополнительная защита от повторения проблемы:
+```bash
+sudo tee /etc/systemd/network/05-docker-veth.network >/dev/null <<'EOF' [Match] Name=veth* Driver=veth  [Link] Unmanaged=yes EOF
+```
+```bash
+sudo tee /etc/systemd/network/06-docker-bridge.network >/dev/null <<'EOF' [Match] Name=docker*  [Link] Unmanaged=yes EOF
+```
+```bash
+sudo tee /etc/systemd/network/07-docker-compose-bridge.network >/dev/null <<'EOF' [Match] Name=br-*  [Link] Unmanaged=yes EOF
+```
+Так systemd-networkd не будет пытаться самостоятельно настраивать:
+docker0 — стандартный bridge Docker;
+br-* — bridge-сети Docker Compose;
+veth* — виртуальные концы сетевых интерфейсов контейнеров.
+
+## Включить маршрутизацию IPv4
+Docker-контейнерам нужен forwarding, чтобы выходить через VPS в интернет:
+```bash
+sudo tee /etc/sysctl.d/99-docker-forward.conf >/dev/null <<'EOF' net.ipv4.ip_forward = 1 EOF  sudo sysctl --system
+```
+Проверка:
+```bash
+sysctl net.ipv4.ip_forward
+```
+Нужен результат:
+```
+net.ipv4.ip_forward = 1
+```
+
+## Перезапустить сеть и Docker
+Перед этим лучше открыть вторую SSH-сессию, чтобы не потерять доступ при ошибке сетевой конфигурации.
+```bash
+sudo systemctl restart systemd-networkd
+sudo systemctl restart docker
+```
+
+## Настроить DNS Docker
+```bash
+cd /etc/docker
+sudo tee daemon.json >/dev/null <<'EOF' {   "dns": ["1.1.1.1", "8.8.8.8"] } EOF
+sudo systemctl restart docker
+```
+
+**Не добавлять туда "iptables": false: Docker должен сам создавать правила NAT и маршрутизации для bridge-сетей.**
+
+## Прокинуть правила UFW в Docker
+Для исходящего трафика контейнеров в интернет:
+```bash
+sudo ufw route allow in on docker0 out on eth0
+sudo ufw route allow in on eth0 out on docker0
+sudo ufw reload
+```
+
+## Контрольные тесты
+После установки Docker всегда проверьте сеть контейнера до сборки приложения:
+```bash
+docker run --rm busybox ping -c 2 172.17.0.1
+docker run --rm busybox ping -c 2 1.1.1.1
+docker run --rm busybox nslookup registry.npmjs.org 1.1.1.1
+docker run --rm curlimages/curl:8.12.1 -I https://registry.npmjs.org/
+```
+
+Успешный последний тест должен вернуть примерно:
+```
+HTTP/2 200
+```
+
+**Только после этого имеет смысл запускать docker compose up -d --build в Шаг 7**
+
 ## Шаг 5. Клонирование репозитория
 
 ```bash
