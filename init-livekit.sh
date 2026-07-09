@@ -13,12 +13,17 @@ require_cmd() {
 
 require_cmd docker
 require_cmd curl
-require_cmd cut
-require_cmd tr
+require_cmd awk
 
+# `livekit-server generate-keys` prints two labelled lines, e.g.:
+#   API Key:  APIha5od6boriFH
+#   API Secret:  YOrUvnkOwpfTgIx7jgAFZetKl7sejBow8mulQFqmznuB
+# Take the last whitespace-separated field of each line (the value itself).
+# The previous `cut -d':'` approach was wrong: it split on the label's colon,
+# so API_KEY got the labels and API_SECRET got key+secret concatenated.
 PAIR="$(docker run --rm livekit/livekit-server generate-keys)"
-API_KEY="$(printf '%s' "$PAIR" | cut -d':' -f1 | tr -d '[:space:]')"
-API_SECRET="$(printf '%s' "$PAIR" | cut -d':' -f2- | tr -d '[:space:]')"
+API_KEY="$(printf '%s\n' "$PAIR" | awk '/API Key/ {print $NF; exit}')"
+API_SECRET="$(printf '%s\n' "$PAIR" | awk '/API Secret/ {print $NF; exit}')"
 
 if [[ -z "$API_KEY" || -z "$API_SECRET" ]]; then
   echo "Ошибка: не удалось сгенерировать LIVEKIT_API_KEY/LIVEKIT_API_SECRET" >&2
