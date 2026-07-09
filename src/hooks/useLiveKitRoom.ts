@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
-import type { RoomOptions } from "livekit-client";
+import { useEffect, useMemo, useState } from "react";
+import { Room } from "livekit-client";
 import { requestToken, TokenServiceError } from "../services/tokenService";
-import { createE2EEOptions } from "../services/e2eeService";
+import { createE2EESetup } from "../services/e2eeService";
 import type { SessionConfig } from "../types";
 
 export type UseLiveKitRoomState = {
   token: string | null;
   serverUrl: string | null;
-  roomOptions: RoomOptions;
+  /** Pass as `<LiveKitRoom room={room}>` — E2EE (if any) is already enabled on it. */
+  room: Room;
   isLoading: boolean;
   error: string | null;
 };
@@ -15,7 +16,12 @@ export type UseLiveKitRoomState = {
 /**
  * Prepares everything <LiveKitRoom> needs before it can mount:
  * - a fresh one-time token (via tokenService)
- * - RoomOptions, including optional E2EE key provider
+ * - a single `Room` instance for the session, with E2EE already fully
+ *   activated on it if requested
+ *
+ * The `Room` (and its E2EE worker, if any) is created exactly once per
+ * hook lifetime — i.e. once per RoomPage session, not on every render —
+ * since `config` doesn't change while a session is mounted.
  *
  * The E2EE key never leaves the client, is never logged and never sent
  * to the token server (HIGH RISK 4.2).
@@ -25,6 +31,58 @@ export function useLiveKitRoom(config: SessionConfig | null): UseLiveKitRoomStat
   const [serverUrl, setServerUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { room, keyProvider } = useMemo(() => {
+    if (!config?.e2eeKey) {
+      return { room: new Room(), keyProvider: null };
+    }
+    const { keyProvider, roomOptionsE2ee } = createE2EESetup();
+    return { room: new Room({ e2ee: roomOptionsE2ee }), keyProvider };
+    // config is fixed for the lifetime of a session (see doc comment above) — intentionally empty deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Terminate the E2EE worker (if any) when the session ends — the previous
+  // implementation recreated a Worker on every render and never cleaned one
+  // up.
+  useEffect(() => {
+    return () => {
+      const e2ee = room.options.e2ee;
+      if (e2ee && "worker" in e2ee) {
+        e2ee.worker.terminate();
+      }
+    };
+  }, [room]);
+
+  useEffect(() => {
+    if (!config?.e2eeKey || !keyProvider) {
+      return;
+    }
+
+    let cancelled = false;
+
+    // Per LiveKit's E2EE guide, keyProvider.setKey() must resolve before
+    // room.setE2EEEnabled(true) — <LiveKitRoom> does not do either of these
+    // automatically just because `e2ee` was set on the Room's options, so
+    // both must happen explicitly here, before the room is handed off to
+    // <LiveKitRoom room={room} connect> (which only mounts once token/
+    // serverUrl are ready, i.e. after this has had time to complete).
+    keyProvider
+      .setKey(config.e2eeKey)
+      .then(() => {
+        if (cancelled) return;
+        return room.setE2EEEnabled(true);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        console.error("Failed to enable E2EE", err);
+        setError("Не удалось включить шифрование (E2EE)");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [room, keyProvider, config?.e2eeKey]);
 
   useEffect(() => {
     if (!config) {
@@ -64,9 +122,5 @@ export function useLiveKitRoom(config: SessionConfig | null): UseLiveKitRoomStat
     };
   }, [config]);
 
-  const roomOptions: RoomOptions = {
-    e2ee: createE2EEOptions(config?.e2eeKey),
-  };
-
-  return { token, serverUrl, roomOptions, isLoading, error };
+  return { token, serverUrl, room, isLoading, error };
 }

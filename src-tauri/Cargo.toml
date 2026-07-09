@@ -1,8 +1,8 @@
 [package]
 name = "tauri-kit"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "TauriKit — cross-platform desktop app for self-hosted audio/video conferencing (LiveKit SFU, optional E2EE, optional STT/summary agent)"
+authors = ["Zakharievich"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

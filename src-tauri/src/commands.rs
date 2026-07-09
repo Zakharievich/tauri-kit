@@ -5,6 +5,23 @@
 
 use tauri::Manager;
 
+/// Rejects any `filename` that isn't a plain, single-component file name —
+/// i.e. no path separators and no `.`/`..` — so [`write_transcript_to_dir`]
+/// can never be tricked into writing outside the given directory.
+fn validate_filename(filename: &str) -> Result<(), String> {
+    let is_plain_component = !filename.is_empty()
+        && filename != "."
+        && filename != ".."
+        && !filename.contains('/')
+        && !filename.contains('\\');
+
+    if is_plain_component {
+        Ok(())
+    } else {
+        Err(format!("Invalid filename: {filename:?}"))
+    }
+}
+
 /// Writes `transcript_content` to `filename` inside the given directory and
 /// returns the absolute path of the written file.
 ///
@@ -12,6 +29,8 @@ use tauri::Manager;
 /// real [`tauri::AppHandle`] (Documents dir resolution requires a running
 /// Tauri app context).
 fn write_transcript_to_dir(dir: &std::path::Path, filename: &str, transcript_content: &str) -> Result<String, String> {
+    validate_filename(filename)?;
+
     let path = dir.join(filename);
 
     std::fs::write(&path, transcript_content).map_err(|err| format!("Failed to write transcript file: {err}"))?;
@@ -67,5 +86,18 @@ mod tests {
         let result = write_transcript_to_dir(&dir, "transcript-test.txt", "hello world");
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_filenames_that_escape_the_target_directory() {
+        let dir = std::env::temp_dir().join(format!("tauri_kit_test_reject_{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("failed to create temp dir");
+
+        for filename in ["../escape.txt", "..\\escape.txt", "sub/escape.txt", "..", "."] {
+            let result = write_transcript_to_dir(&dir, filename, "hello world");
+            assert!(result.is_err(), "expected {filename:?} to be rejected");
+        }
+
+        fs::remove_dir_all(&dir).ok();
     }
 }

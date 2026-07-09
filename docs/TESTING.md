@@ -31,18 +31,25 @@
   2. корректная обработка ошибки при записи в несуществующую директорию
      (`Result::Err`, а не паника).
 
-### `agent/` (pytest)
-- Ожидаемое покрытие (см. `docs/PLAN.md` §9):
-  - `transcriber.py` — накопление сегментов с корректными временными
-    метками `[HH:MM:SS]`, graceful-обработка недоступности
-    faster-whisper-server (чанк пропускается, работа продолжается).
-  - `summarizer.py` — вызов Ollama только при `ENABLE_SUMMARY=true`,
-    возврат `""` при таймауте/ошибке без падения агента.
-  - `exporter.py` — корректная сборка `.txt`-документа из сегментов и
-    формирование сообщения `transcript_final` по зафиксированному
-    контракту (`type`, `version`, `payload.transcript`, `payload.summary`).
-  - `main.py` — корректное поведение при `ENABLE_STT=false` (агент не
-    подключается к комнате, только предупреждение в лог).
+### `agent/` (pytest, `agent/tests/`)
+- `test_transcriber.py` — накопление сегментов с корректными временными
+  метками `[HH:MM:SS]`, graceful-обработка недоступности
+  faster-whisper-server (чанк пропускается, работа продолжается), tail-чанк
+  ниже порога отправляется через `flush_all()`.
+- `test_summarizer.py` — вызов Ollama только при `ENABLE_SUMMARY=true`,
+  возврат `""` при пустом транскрипте, HTTP-ошибке или недоступности Ollama,
+  без падения агента.
+- `test_exporter.py` — корректная сборка текста транскрипта из сегментов и
+  формирование сообщения `transcript_final` по зафиксированному контракту
+  (`type`, `version`, `payload.transcript`, `payload.summary`); публикация
+  не падает, если `publish_data` бросает исключение (best-effort).
+- `test_main.py` — `_env_bool` парсинг флагов; `entrypoint()`/`main()` не
+  подключаются к комнате и не стартуют worker при `ENABLE_STT=false`.
+
+HTTP-вызовы (faster-whisper-server, Ollama) мокируются через
+`monkeypatch.setattr(httpx.AsyncClient, "post", ...)` — без реального SFU
+или STT/LLM бэкенда. Зависимости для тестов — в `agent/requirements-dev.txt`
+(`pip install -r requirements-dev.txt`).
 
 ## Команды запуска тестов
 
@@ -55,7 +62,7 @@ cd server && pnpm test # server/
 cd src-tauri
 cargo test
 
-# Python agent
+# Python agent (first: pip install -r requirements-dev.txt)
 cd agent
 pytest
 ```
@@ -75,7 +82,7 @@ pnpm build && pnpm lint && pnpm test
 | `src-tauri/` (commands.rs) | среднее-высокое (~70%) | Ядровая логика записи файла покрыта; сам `#[tauri::command]` обвязку (резолвинг `document_dir`) юнит-тестами не покрыть без интеграционного окружения. |
 | `src/services` (e2ee, token) | среднее (~60%) | Покрыты чистые функции сервисов; UI-компоненты и хуки, зависящие от `<LiveKitRoom>`, требуют интеграционных/E2E тестов (не реализованы). |
 | `src/components`, `src/pages` | низкое | Компоненты почти не покрыты юнит-тестами — рекомендуется E2E/визуальное тестирование в будущем. |
-| `agent/` | низкое-среднее (план) | Основная логика (`transcriber`/`summarizer`/`exporter`) поддаётся юнит-тестированию через мокирование HTTP; `main.py`/интеграция с LiveKit Agents тестируется хуже без реального SFU. |
+| `agent/` | среднее (~65%) | Основная логика (`transcriber`/`summarizer`/`exporter`) покрыта юнит-тестами через мокирование HTTP; `ENABLE_STT=false` покрыт для `main.py`/`entrypoint()`. Реальная интеграция с LiveKit SFU (join/subscribe/shutdown callback) тестируется хуже без реального SFU — не покрыта. |
 
 Модули с высокими рисками (токены, E2EE, сохранение файла) намеренно
 покрыты тестами в первую очередь, согласно `docs/AI_GUIDELINES.md`.

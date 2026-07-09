@@ -1,0 +1,12 @@
+# Production config for the self-hosted LiveKit SFU (single node).
+# API keys are intentionally NOT stored here — they are supplied via the
+# LIVEKIT_KEYS environment variable (see docker-compose.yml / .env), which
+# keeps secrets out of version control.
+port: 7880
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  # Discovers the host's public IP via STUN — required so that WebRTC
+  # media reaches clients correctly from behind the VPS provider's NAT.
+  use_external_ip: true

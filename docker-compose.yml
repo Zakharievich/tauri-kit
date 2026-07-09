@@ -1,11 +1,16 @@
 services:
+  # network_mode: host is LiveKit's own recommendation for Docker deployments
+  # (avoids bridge-network NAT overhead for the UDP media port range, and
+  # means ufw rules apply directly instead of being bypassed by Docker's
+  # iptables rules for published ports). Linux-only — this compose file
+  # targets the VPS deployment target described in docs/README.md.
   livekit:
     image: livekit/livekit-server:latest
-    command: --dev --bind 0.0.0.0
-    ports:
-      - "7880:7880"                       # LiveKit API/WS
-      - "7881:7881"                       # RTC TCP
-      - "50000-50100:50000-50100/udp"    # RTC UDP
+    restart: unless-stopped
+    network_mode: host
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
     environment:
       - "LIVEKIT_KEYS=${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
 
@@ -13,12 +18,43 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
-    working_dir: /repo/server/
-    command: pnpm start
+    restart: unless-stopped
+    # Bound to loopback only: not reachable from the internet directly,
+    # only via the Caddy reverse proxy (see Caddyfile) which terminates TLS
+    # on 80/443. Keeps the token endpoint off the open internet in plaintext.
     ports:
-      - "3001:3001"
+      - "127.0.0.1:${TOKEN_SERVER_PORT}:${TOKEN_SERVER_PORT}"
     environment:
       - "PORT=${TOKEN_SERVER_PORT}"
+      - "NODE_ENV=production"
       - "LIVEKIT_URL=${LIVEKIT_URL}"
       - "LIVEKIT_API_KEY=${LIVEKIT_API_KEY}"
       - "LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET}"
+      - "ALLOWED_ORIGIN=${ALLOWED_ORIGIN}"
+    # healthcheck comes from server/Dockerfile's HEALTHCHECK instruction.
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Reverse proxy + TLS termination in front of livekit (127.0.0.1:7880) and
+  # token-server (127.0.0.1:${TOKEN_SERVER_PORT}). See Caddyfile. Also uses
+  # host networking so it can reach the other two via loopback without extra
+  # Docker network wiring.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - "LK_DOMAIN=${LK_HOST}"
+      - "TOKEN_SERVER_PORT=${TOKEN_SERVER_PORT}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - token-server
+
+volumes:
+  caddy_data:
+  caddy_config:

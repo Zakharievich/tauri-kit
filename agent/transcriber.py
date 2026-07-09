@@ -48,14 +48,6 @@ class TranscriptSegment:
         timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         return f"[{timestamp}] {self.text}"
 
-    def as_dict(self) -> dict:
-        """Render as `{"timestamp": "HH:MM:SS", "text": "..."}`, matching the
-        task spec's segment shape."""
-        hours, remainder = divmod(int(self.offset_seconds), 3600)
-        minutes, seconds = divmod(remainder, 60)
-        timestamp = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-        return {"timestamp": timestamp, "text": self.text}
-
 
 @dataclass
 class _ParticipantBuffer:
@@ -176,18 +168,6 @@ class Transcriber:
         `payload.transcript` in the `transcript_final` message
         (docs/PLAN.md §7.2)."""
         return "\n".join(segment.format() for segment in self._segments)
-
-    def get_transcript(self) -> str:
-        """Formatted transcript string, per the task spec
-        (`Transcriber.get_transcript() -> str`). Alias of
-        `get_transcript_text()`, kept for naming compatibility with
-        docs/PLAN.md and the task description."""
-        return self.get_transcript_text()
-
-    def get_segments(self) -> list[dict]:
-        """Accumulated segments as `{"timestamp": "HH:MM:SS", "text": "..."}`
-        dicts, per the task spec's segment shape."""
-        return [segment.as_dict() for segment in self._segments]
 
     @property
     def segments(self) -> list[TranscriptSegment]:

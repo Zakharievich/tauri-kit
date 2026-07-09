@@ -1,0 +1,27 @@
+# Reverse proxy / TLS termination for the self-hosted stack.
+#
+# {$LK_DOMAIN} is read from the environment (see docker-compose.yml, sourced
+# from .env / init-livekit.sh). If it's a real public domain, Caddy obtains
+# and renews a Let's Encrypt certificate automatically (HTTP-01 challenge —
+# requires ports 80/443 reachable from the internet). If it's a bare IP,
+# Caddy falls back to its internal self-signed CA, which is enough for
+# WebRTC/wss to work but will show an untrusted-certificate warning to
+# anything that validates against a public CA — use a real domain for a
+# genuinely production-grade deployment.
+{$LK_DOMAIN} {
+	# Token server: POST /token, GET /health.
+	handle /token* {
+		reverse_proxy 127.0.0.1:{$TOKEN_SERVER_PORT}
+	}
+	handle /health {
+		reverse_proxy 127.0.0.1:{$TOKEN_SERVER_PORT}
+	}
+
+	# Everything else (LiveKit signaling API + WebSocket upgrade for RTC
+	# session negotiation). Actual media (UDP 50000-50100, TCP 7881) bypasses
+	# this proxy entirely and is exposed directly, per LiveKit's own
+	# guidance — it cannot sit behind a TLS-terminating proxy.
+	handle {
+		reverse_proxy 127.0.0.1:7880
+	}
+}
