@@ -1,7 +1,7 @@
 ## Архитектура
 На VPS размещаются серверные компоненты; десктопный клиент устанавливается на машинах пользователей (Windows/Linux/macOS).
 1. LiveKit SFU — self‑hosted медиасервер, к которому подключаются клиенты по WSS/WebRTC.
-2. Token‑server (server/) — Node.js‑сервис, выдающий одноразовые JWT‑токены по POST /token.
+2. Token‑server (server/) — Node.js‑сервис, выдающий короткоживущие (TTL 1ч) JWT‑токены по POST /token.
 3. Python‑агент (agent/) — опциональный скрытый участник комнаты LiveKit, делающий STT через faster-whisper-server и саммари через Ollama; его отсутствие не мешает звонку.
 4. Tauri‑клиент — десктопное приложение; получает токен у token‑server, подключается к LiveKit, при необходимости сохраняет транскрипт локально.
 
@@ -18,15 +18,17 @@
 
 Порты, которые должны быть открыты наружу:
 
-| Компонент         | Порт/диапазон | Протокол |
-| ----------------- | ------------- | -------- |
-| LiveKit API/WS    | 7880          | TCP      |
-| LiveKit RTC (TCP) | 7881          | TCP      |
-| LiveKit RTC (UDP) | 50000–50100   | UDP      |
-| Token‑server      | 3001          | TCP      |
+| Компонент                     | Порт/диапазон | Протокол |
+| ------------------------------ | ------------- | -------- |
+| Caddy (HTTPS, WSS)             | 80, 443       | TCP      |
+| LiveKit RTC (TCP fallback)     | 7881          | TCP      |
+| LiveKit RTC (UDP media)        | 50000–50100   | UDP      |
 
-Порты 8000 (faster‑whisper) и 11434 (Ollama) оставляются
-только для локального доступа — агент обращается к ним по localhost.
+LiveKit API/WS (7880) и token‑server (3001) **не** публикуются наружу —
+они слушают только на loopback/host-сети и доступны клиентам исключительно
+через reverse-proxy Caddy на 80/443 (TLS), см. `Caddyfile`. Порты 8000
+(faster‑whisper) и 11434 (Ollama) тоже остаются только для локального
+доступа — агент обращается к ним по localhost.
 
 ## Установка зависимостей
 1.1.1 Вход на сервер уже должен быть уже реализован по SSH.
@@ -45,15 +47,14 @@ sudo usermod -aG docker $USER
 
 1.3.1 После этого перелогиниваемся по SSH.
 
-1.4.1 Открываем нужные порты:
+1.4.1 Открываем нужные порты. 7880 (LiveKit API/WS) и 3001 (token‑server)
+**не** открываются наружу — они идут только через Caddy на 80/443:
 ```bash
 sudo ufw allow 22/tcp          # SSH
-sudo ufw allow 7880/tcp        # LiveKit API/WS
-sudo ufw allow 7881/tcp        # RTC TCP
-sudo ufw allow 50000:50100/udp # RTC UDP
-sudo ufw allow 3001/tcp        # token-server
-sudo ufw allow 80
-sudo ufw allow 443
+sudo ufw allow 7881/tcp        # RTC TCP fallback
+sudo ufw allow 50000:50100/udp # RTC UDP media
+sudo ufw allow 80              # Caddy: HTTP-01 challenge
+sudo ufw allow 443             # Caddy: HTTPS/WSS
 ufw default deny incoming
 ufw default allow outgoing
 sudo ufw enable
@@ -69,7 +70,11 @@ git clone https://github.com/Zakharievich/tauri-kit.git
 cd tauri-kit
 ```
 
-1.6.1 Запуск стека. Генерируем ключи и создаём .env :
+1.6.1 Запуск стека. Генерируем ключи и создаём .env — на запрос "IP или домен
+сервера" лучше ответить реальным доменом, указывающим на этот сервер (A-запись):
+тогда Caddy сам получит доверенный TLS-сертификат Let's Encrypt. Голый IP тоже
+сработает, но Caddy выпустит самоподписанный сертификат (клиенты увидят
+предупреждение о недоверенном сертификате):
 ```bash
 chmod +x ./init-livekit.sh
 bash ./init-livekit.sh
@@ -77,23 +82,26 @@ ls -la .env   # проверяем создались ли ключи
 cat .env
 ```
 
-Сгенерированные значение LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL и TOKEN_SERVER_PORT будут использованы из .env дальше при вызове docker compose.
+Сгенерированные значения (LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL,
+LK_HOST, TOKEN_SERVER_PORT, ALLOWED_ORIGIN) будут использованы из .env дальше
+при вызове docker compose.
 
-1.6.2 Поднимаем LiveKit + token-server:
+1.6.2 Поднимаем LiveKit + token-server + Caddy (docker compose сам собирает
+образ token-server из server/Dockerfile — отдельный `docker build` не нужен):
 ```bash
 docker compose pull
-docker build --network host -f server/Dockerfile -t tauri-kit-token-server .
-docker compose up -d
+docker compose up -d --build
 ```
 
 1.6.3 Проверяем:
 ```bash
 docker compose ps
+docker compose logs -f caddy
 ```
 
 ## После этого:
-- LiveKit SFU доступен на wss://<IP-сервера>:7880.
-- token‑server отдаёт токены по http://<IP-сервера>:3001/token.
+- LiveKit SFU доступен клиентам по wss://<домен-или-IP>/ (443, через Caddy).
+- token‑server отдаёт токены по https://<домен-или-IP>/token (443, через Caddy).
 
 ## Опциональный Python‑агент (agent/).
 Агент полностью опционален — без него звонки, чат и E2EE работают без ограничений; транскрипция и саммари просто будут недоступны.
@@ -179,7 +187,8 @@ macOS: src-tauri/target/release/bundle/dmg/*.dmg (для дистрибуции 
 ## Использование клиента:
 После запуска установленного клиента открывается страница подключения:
 
-1.9.1 "URL сервера" — базовый URL token‑server: http://<IP сервера>:3001/token
+1.9.1 "URL сервера" — базовый URL token‑server (без `/token` в конце,
+клиент сам добавляет путь `/token` при запросе): https://<домен-или-IP сервера>
 
 1.9.2 "Имя комнаты" (roomName) — произвольное имя комнаты (например team-daily). Все участники с одинаковым roomName оказываются в одной комнате.
 

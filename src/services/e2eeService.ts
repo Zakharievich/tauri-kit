@@ -18,23 +18,31 @@ export function generateE2EEKey(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+export type E2EESetup = {
+  /** Pass to `keyProvider.setKey()` (async) before calling `room.setE2EEEnabled(true)`. */
+  keyProvider: ExternalE2EEKeyProvider;
+  /** Pass as `RoomOptions['e2ee']` when constructing the `Room`. */
+  roomOptionsE2ee: NonNullable<RoomOptions["e2ee"]>;
+};
+
 /**
- * Builds the `RoomOptions['e2ee']` block from a raw key string.
- * Returns `undefined` when no key is provided (E2EE disabled).
+ * Builds the keyProvider + worker for E2EE (`RoomOptions['e2ee']`). Building
+ * this is synchronous; setting the actual key is not (see
+ * `ExternalE2EEKeyProvider.setKey()`, called separately by the caller once
+ * the Room exists — see useLiveKitRoom.ts).
  *
- * The key is only ever passed to `ExternalE2EEKeyProvider.setKey()` — it is
+ * The key itself never touches this function's return value directly — it
+ * is only ever passed to `ExternalE2EEKeyProvider.setKey()` by the caller,
  * never logged and never transmitted to the token server (HIGH RISK 4.2).
  */
-export function createE2EEOptions(key: string | undefined): RoomOptions["e2ee"] | undefined {
-  if (!key) {
-    return undefined;
-  }
-
+export function createE2EESetup(): E2EESetup {
   const keyProvider = new ExternalE2EEKeyProvider();
-  void keyProvider.setKey(key);
 
   return {
     keyProvider,
-    worker: new Worker(new URL("livekit-client/e2ee-worker", import.meta.url)),
+    roomOptionsE2ee: {
+      keyProvider,
+      worker: new Worker(new URL("livekit-client/e2ee-worker", import.meta.url)),
+    },
   };
 }

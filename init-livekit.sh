@@ -39,17 +39,26 @@ fi
 
 umask 077
 
+# LK_HOST is used both as the LiveKit/token-server public hostname and as
+# the domain Caddy requests a TLS certificate for (see Caddyfile). A real
+# domain gets a trusted Let's Encrypt certificate automatically; a bare IP
+# falls back to Caddy's self-signed internal CA (works, but shows an
+# untrusted-cert warning) — see docs/README.md.
 cat > "$ENV_FILE" <<EOF
-LIVEKIT_URL=wss://${LK_HOST}:7880
+LK_HOST=${LK_HOST}
+LIVEKIT_URL=wss://${LK_HOST}
 LIVEKIT_API_KEY=${API_KEY}
 LIVEKIT_API_SECRET=${API_SECRET}
 TOKEN_SERVER_PORT=3001
+ALLOWED_ORIGIN=http://localhost:1420,tauri://localhost,http://tauri.localhost
 EOF
 
 echo "============================================"
-echo "LIVEKIT_URL=wss://${LK_HOST}:7880"
+echo "LK_HOST=${LK_HOST}"
+echo "LIVEKIT_URL=wss://${LK_HOST}"
 echo "LIVEKIT_API_KEY=${API_KEY}"
 echo "LIVEKIT_API_SECRET=***hidden***"
 echo ".env создан: ${ENV_FILE}"
 echo "Теперь запусти: docker compose up -d"
+echo "В клиенте укажи \"URL сервера\" = https://${LK_HOST}"
 echo "============================================"

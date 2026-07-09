@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { loadConfig } from './config.js';
 import { createAccessToken } from './tokenService.js';
 
@@ -12,7 +13,16 @@ export function buildServer(config = loadConfig()) {
   const app = Fastify({ logger: true });
 
   app.register(cors, {
-    origin: config.allowedOrigin,
+    origin: config.allowedOrigins,
+  });
+
+  // The endpoint mints LiveKit access tokens for anyone who can reach it —
+  // there's no per-user auth in front of it (see docs/PLAN.md 4.1). A basic
+  // rate limit at least bounds how fast one client can mint tokens/probe
+  // room names.
+  app.register(rateLimit, {
+    max: 20,
+    timeWindow: '1 minute',
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
@@ -44,7 +54,7 @@ async function main() {
   const app = buildServer(config);
 
   try {
-    await app.listen({ port: 3001, host: '0.0.0.0' });
+    await app.listen({ port: config.port, host: '0.0.0.0' });
   } catch (error) {
     app.log.error(error);
     process.exit(1);

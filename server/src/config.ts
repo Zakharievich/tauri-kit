@@ -7,7 +7,10 @@ const envSchema = z.object({
   LIVEKIT_API_KEY: z.string().min(1, 'LIVEKIT_API_KEY is required'),
   LIVEKIT_API_SECRET: z.string().min(1, 'LIVEKIT_API_SECRET is required'),
   LIVEKIT_URL: z.string().min(1, 'LIVEKIT_URL is required'),
-  ALLOWED_ORIGIN: z.string().min(1).default('http://localhost:1420'),
+  ALLOWED_ORIGIN: z
+    .string()
+    .min(1)
+    .default('http://localhost:1420,tauri://localhost,http://tauri.localhost'),
   PORT: z.coerce.number().int().positive().default(3001),
   TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 });
@@ -16,7 +19,8 @@ export type AppConfig = Readonly<{
   livekitApiKey: string;
   livekitApiSecret: string;
   livekitUrl: string;
-  allowedOrigin: string;
+  /** Parsed from the comma-separated ALLOWED_ORIGIN env var. */
+  allowedOrigins: string[];
   port: number;
   tokenTtlSeconds: number;
 }>;
@@ -49,7 +53,9 @@ function parseEnv(env: NodeJS.ProcessEnv): AppConfig {
     livekitApiKey: data.LIVEKIT_API_KEY,
     livekitApiSecret: data.LIVEKIT_API_SECRET,
     livekitUrl: data.LIVEKIT_URL,
-    allowedOrigin: data.ALLOWED_ORIGIN,
+    allowedOrigins: data.ALLOWED_ORIGIN.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
     port: data.PORT,
     tokenTtlSeconds: data.TOKEN_TTL_SECONDS,
   };

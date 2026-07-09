@@ -47,7 +47,7 @@ export function RoomPage() {
   const location = useLocation();
   const config = (location.state as SessionConfig | null) ?? null;
 
-  const { token, serverUrl, roomOptions, isLoading, error } = useLiveKitRoom(config);
+  const { token, serverUrl, room, isLoading, error } = useLiveKitRoom(config);
 
   function handleLeave(transcriptText: string | null) {
     navigate("/transcript", { state: { text: transcriptText } });
@@ -82,9 +82,9 @@ export function RoomPage() {
 
   return (
     <LiveKitRoom
+      room={room}
       serverUrl={serverUrl}
       token={token}
-      options={roomOptions}
       connect
       onDisconnected={() => handleLeave(null)}
       data-lk-theme="default"

@@ -4,31 +4,20 @@ Single responsibility: turn accumulated transcript segments (+ optional
 summary) into the final document and publish it to every participant in
 the room. Knows nothing about STT or Ollama (SOLID / SRP).
 
-Two document representations are produced:
+`publish_final()` wraps the transcript/summary in the fixed `AgentMessage`
+JSON envelope (docs/PLAN.md §7.2):
 
-- `format_plain_document()` — the human-readable plain-text format required
-  by the task spec:
+    {
+      "type": "transcript_final",
+      "version": 1,
+      "payload": { "transcript": "...", "summary": "..." }
+    }
 
-      === ТРАНСКРИПЦИЯ ===
-      [текст по строкам]
-
-      === САММАРИ ===
-      [текст саммари, если не пустой]
-
-- `publish_final()` — wraps the transcript/summary in the fixed
-  `AgentMessage` JSON envelope (docs/PLAN.md §7.2):
-
-      {
-        "type": "transcript_final",
-        "version": 1,
-        "payload": { "transcript": "...", "summary": "..." }
-      }
-
-  This is the canonical wire format actually sent over the DataChannel and
-  already parsed by the frontend (`src/hooks/useTranscription.ts`).
-  `summary` is always present as a string — an empty string `""` means no
-  summary is available (disabled via ENABLE_SUMMARY or Ollama was
-  unreachable), never `null`/omitted, so the frontend contract stays simple.
+This is the canonical wire format actually sent over the DataChannel and
+already parsed by the frontend (`src/hooks/useTranscription.ts`).
+`summary` is always present as a string — an empty string `""` means no
+summary is available (disabled via ENABLE_SUMMARY or Ollama was
+unreachable), never `null`/omitted, so the frontend contract stays simple.
 """
 
 from __future__ import annotations
@@ -51,30 +40,6 @@ def build_document(segments: list) -> str:
     on `transcriber.py`.
     """
     return "\n".join(segment.format() for segment in segments)
-
-
-def format_plain_document(transcript: str, summary: str) -> str:
-    """Formats the human-readable plain-text document requested by the task
-    spec, combining the transcript and an optional summary section:
-
-        === ТРАНСКРИПЦИЯ ===
-        [текст по строкам]
-
-        === САММАРИ ===
-        [текст саммари, если не пустой]
-
-    The `=== САММАРИ ===` section is omitted entirely when `summary` is
-    empty/blank. Returns the ready-to-send string; how it is delivered
-    (e.g. over the DataChannel) is the caller's responsibility.
-    """
-    parts = ["=== ТРАНСКРИПЦИЯ ===", transcript]
-
-    if summary and summary.strip():
-        parts.append("")
-        parts.append("=== САММАРИ ===")
-        parts.append(summary)
-
-    return "\n".join(parts)
 
 
 def _build_payload(transcript: str, summary: str) -> dict:

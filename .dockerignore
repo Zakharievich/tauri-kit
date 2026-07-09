@@ -1,0 +1,17 @@
+.git
+node_modules
+dist
+dist-ssr
+src-tauri/target
+src-tauri/gen
+agent
+docs
+public
+src
+index.html
+*.md
+.vscode
+.github
+.env
+.env.*
+!.env.example
