@@ -7,7 +7,7 @@ ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 WORKDIR /repo
 
-RUN npm install -g pnpm@9.15.4
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY server ./server
