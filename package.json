@@ -2,7 +2,7 @@
   "name": "tauri-kit",
   "description": "TauriKit — cross-platform desktop app for self-hosted audio/video conferencing (LiveKit SFU, optional E2EE, optional STT/summary agent)",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "dev": "vite",

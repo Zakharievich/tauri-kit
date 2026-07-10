@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Copy } from "lucide-react";
 import { generateE2EEKey } from "../services/e2eeService";
 import { generateRoomName, parseInviteLink } from "../services/inviteLink";
 import type { ParsedInvite } from "../services/inviteLink";
-import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type { SessionConfig } from "../types";
 
 /** localStorage key for remembering the last-used join settings. The E2EE key
@@ -42,6 +40,11 @@ function loadPersisted(): PersistedJoin {
  * Previously entered settings (except the E2EE key) are remembered in
  * localStorage. The E2EE key never leaves the client, is never persisted and
  * never sent to the token server (HIGH RISK 4.2).
+ *
+ * The E2EE key is intentionally never shown or editable: ticking "Шифрование"
+ * generates one silently, and pasting an invite that carries a key loads it
+ * behind the scenes. The only way to share it is the in-room "add participant"
+ * invite link (which embeds the key), so it can't be copied out on its own.
  */
 export function JoinPage() {
   const navigate = useNavigate();
@@ -49,7 +52,11 @@ export function JoinPage() {
 
   const [serverUrl, setServerUrl] = useState(persisted.serverUrl ?? "");
   const [identity, setIdentity] = useState(persisted.identity ?? "");
-  const [e2eeKey, setE2eeKey] = useState("");
+  // Kept in state but never rendered. If E2EE was remembered as on, mint a key
+  // up front so the invariant "e2eeEnabled ⇒ a key exists" holds on load too.
+  const [e2eeKey, setE2eeKey] = useState(() =>
+    persisted.e2eeEnabled ? generateE2EEKey() : "",
+  );
   const [e2eeEnabled, setE2eeEnabled] = useState(persisted.e2eeEnabled ?? false);
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(
     persisted.transcriptionEnabled ?? false,
@@ -60,8 +67,6 @@ export function JoinPage() {
   // "Join". Never mirrored into the visible fields above.
   const [parsedInvite, setParsedInvite] = useState<ParsedInvite | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-
-  const { copied: keyCopied, copy: copyKey } = useCopyFeedback();
 
   // Remember settings (never the E2EE key) for next launch. Only the "create"
   // flow reads these back; the join flow ignores them.
@@ -80,6 +85,9 @@ export function JoinPage() {
     setE2eeEnabled(checked);
     if (checked) {
       setTranscriptionEnabled(false);
+      // Generate the key behind the scenes — it is never shown; it can only be
+      // shared via the in-room "add participant" invite link.
+      setE2eeKey(generateE2EEKey());
     } else {
       setE2eeKey("");
     }
@@ -93,14 +101,21 @@ export function JoinPage() {
     }
   }
 
-  function handleGenerateKey() {
-    setE2eeKey(generateE2EEKey());
-  }
-
   function handleInviteChange(value: string) {
     setInviteInput(value);
 
     if (!value.trim()) {
+      // Clearing a previously valid invite returns the form to a blank "create"
+      // state (server URL and options) so the — now re-enabled — Создать button
+      // starts fresh. The name is left intact (it isn't part of the link; each
+      // participant supplies their own). Only reset when an invite was actually
+      // loaded, so remembered settings survive a normal launch with an empty field.
+      if (parsedInvite) {
+        setServerUrl("");
+        setE2eeEnabled(false);
+        setE2eeKey("");
+        setTranscriptionEnabled(false);
+      }
       setParsedInvite(null);
       setInviteError(null);
       return;
@@ -115,6 +130,15 @@ export function JoinPage() {
 
     setInviteError(null);
     setParsedInvite(parsed);
+
+    // Reflect the invite's encryption state in the (key-less) options so the
+    // user can see the session is encrypted — without ever exposing the key.
+    const hasKey = !!parsed.e2eeKey;
+    setE2eeEnabled(hasKey);
+    setE2eeKey(parsed.e2eeKey ?? "");
+    if (hasKey) {
+      setTranscriptionEnabled(false);
+    }
   }
 
   /** Join flow: use the parsed invite (hidden from the form) + the user's name.
@@ -138,6 +162,13 @@ export function JoinPage() {
   function handleCreateRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    // In join mode the "Создать" button is hidden, but pressing Enter in a
+    // field still submits the form — ignore it so a loaded invite never
+    // accidentally creates a room.
+    if (parsedInvite) {
+      return;
+    }
+
     if (!identity.trim() || !serverUrl.trim()) {
       return;
     }
@@ -154,10 +185,16 @@ export function JoinPage() {
   }
 
   const canJoin = parsedInvite !== null && identity.trim().length > 0;
+  // A valid invite switches the page to a compact "join" mode: the create-only
+  // divider and button are hidden and the form is narrowed.
+  const isJoinMode = parsedInvite !== null;
 
   return (
     <main className="join-page">
-      <form className="join-page__form" onSubmit={handleCreateRoom}>
+      <form
+        className={`join-page__form${isJoinMode ? " join-page__form--compact" : ""}`}
+        onSubmit={handleCreateRoom}
+      >
         <label className="join-page__field">
           <span className="join-page__label">Ваше имя</span>
           <input
@@ -197,9 +234,11 @@ export function JoinPage() {
           {inviteError && <span className="join-page__hint join-page__hint--error">{inviteError}</span>}
         </label>
 
-        <div className="join-page__divider">
-          <span>или создайте новую</span>
-        </div>
+        {!isJoinMode && (
+          <div className="join-page__divider">
+            <span>или создайте новую</span>
+          </div>
+        )}
 
         <label className="join-page__field">
           <span className="join-page__label">URL сервера</span>
@@ -224,32 +263,10 @@ export function JoinPage() {
           </label>
 
           {e2eeEnabled && (
-            <div className="e2ee-key-field">
-              <input
-                type="text"
-                value={e2eeKey}
-                onChange={(e) => setE2eeKey(e.currentTarget.value)}
-                placeholder="Вставьте E2EE ключ"
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <div className="e2ee-key-field__buttons">
-                <button type="button" onClick={handleGenerateKey}>
-                  Сгенерировать секретный ключ
-                </button>
-                {e2eeKey && (
-                  <button
-                    type="button"
-                    className={`icon-button copy-button${keyCopied ? " copy-button--copied" : ""}`}
-                    onClick={() => void copyKey(e2eeKey)}
-                    aria-label="Скопировать ключ"
-                    title={keyCopied ? "Скопировано" : "Копировать"}
-                  >
-                    {keyCopied ? <Check size={18} /> : <Copy size={18} />}
-                  </button>
-                )}
-              </div>
-            </div>
+            <span className="join-page__hint">
+              Ключ шифрования создаётся автоматически и передаётся только через ссылку-приглашение
+              (кнопка «Добавить участника» в комнате).
+            </span>
           )}
 
           <label className="join-page__checkbox" title="Транскрипция недоступна при включённом шифровании">
@@ -263,9 +280,11 @@ export function JoinPage() {
           </label>
         </fieldset>
 
-        <button type="submit" className="join-page__submit">
-          Создать
-        </button>
+        {!isJoinMode && (
+          <button type="submit" className="join-page__submit">
+            Создать
+          </button>
+        )}
       </form>
     </main>
   );
