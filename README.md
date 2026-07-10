@@ -23,16 +23,21 @@
 
 Порядок такой: сначала поднимается сервер (LiveKit + token-server), затем ставится клиент.
 
-**1. Разверните сервер** на VPS (Ubuntu 24.04). Полная пошаговая инструкция — [docs/README.md](./docs/README.md).
+**1. Разверните сервер** на VPS (Ubuntu 24.04). Создайте DNS A‑запись на IP сервера, затем разверните всё **одним скриптом**:
+```bash
+git clone https://github.com/Zakharievich/tauri-kit.git
+cd tauri-kit && sudo bash deploy.sh --domain conf.example.com
+```
+Полная инструкция (и путь `curl … | sudo bash` одной строкой, и ручная установка) — [docs/README.md](./docs/README.md).
 После деплоя вы получите «URL сервера» вида `https://ваш-домен`.
 
 **2. Получите клиент** — одним из двух способов:
 
 - **Скачать готовый файл** со страницы [Releases](https://github.com/Zakharievich/tauri-kit/releases).
   Имена файлов включают версию, платформу и архитектуру:
-  - Windows — `TauriKit_v1.0.6_Windows_x64.exe`;
-  - Linux — `TauriKit_v1.0.6_Linux_x64.AppImage` (portable: `chmod +x`, затем запуск);
-  - macOS (Apple Silicon) — `TauriKit_v1.0.6_macOS_arm64.dmg` (откройте образ и перетащите
+  - Windows — `TauriKit_v1.0.7_Windows_x64.exe`;
+  - Linux — `TauriKit_v1.0.7_Linux_x64.AppImage` (portable: `chmod +x`, затем запуск);
+  - macOS (Apple Silicon) — `TauriKit_v1.0.7_macOS_arm64.dmg` (откройте образ и перетащите
     `TauriKit.app` в `Applications`).
 - **Собрать из исходников** (нужны Node.js 18+, pnpm и [Rust + Tauri CLI](https://tauri.app/start/prerequisites/)):
   ```bash
@@ -51,6 +56,10 @@
 >
 > **Windows:** SmartScreen может предупредить о неизвестном издателе — «Подробнее» → «Выполнить в
 > любом случае» (до появления code-signing сертификата).
+>
+> **Windows: старая иконка после обновления.** Если при установке поверх прежней версии в меню Пуск
+> или на ярлыке видна старая иконка — это кэш иконок Explorer, а не сборки. Обычно обновляется само
+> после перезахода; принудительно: `ie4uinit.exe -show` и перезапуск `explorer.exe`.
 
 **3. Установите/запустите** приложение. Дальше есть два сценария:
 - **Присоединиться к комнате по ссылке** — вставьте ссылку-приглашение в верхнее поле, введите

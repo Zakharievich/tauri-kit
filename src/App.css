@@ -96,6 +96,13 @@ button {
   gap: 1.25em;
 }
 
+/* Compact "join" mode: a valid invite hides the create-only controls, so the
+   form is narrowed and tightened around the name + invite fields. */
+.join-page__form--compact {
+  width: min(380px, 100%);
+  gap: 1em;
+}
+
 .join-page__field {
   display: flex;
   flex-direction: column;
@@ -184,27 +191,6 @@ button {
 
 .join-page__checkbox input {
   width: auto;
-}
-
-.e2ee-key-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6em;
-  padding: 0.8em;
-  border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.03);
-}
-
-.e2ee-key-field input {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.e2ee-key-field__buttons {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.6em;
 }
 
 /* Square button that holds a single icon (copy, send, attach, add, …). */

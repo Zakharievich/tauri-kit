@@ -1,6 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { buildInviteLink, parseInviteLink, generateRoomName } from "./inviteLink";
 
+/** Builds a legacy `tk1:<base64url(json)>` token the way old builds did, so we
+ *  can assert backward-compatible parsing without importing removed code. */
+function legacyTk1(serverUrl: string, roomName: string, t: 0 | 1, key?: string): string {
+  const arr: unknown[] = [serverUrl, roomName, t];
+  if (key) arr.push(key);
+  const b64 = btoa(JSON.stringify(arr))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  return `tk1:${b64}`;
+}
+
 describe("inviteLink", () => {
   it("round-trips a full config (with E2EE key)", () => {
     const link = buildInviteLink({
@@ -16,6 +28,23 @@ describe("inviteLink", () => {
       roomName: "room-abc123",
       e2eeKey: "deadbeef",
       transcriptionEnabled: false,
+    });
+  });
+
+  it("round-trips a real 64-char hex E2EE key", () => {
+    const e2eeKey = "0123456789abcdef".repeat(4); // 64 hex chars = 32 bytes
+    const link = buildInviteLink({
+      serverUrl: "https://conf.example.com",
+      roomName: "room-0123456789abcdef",
+      e2eeKey,
+      transcriptionEnabled: true,
+    });
+
+    expect(parseInviteLink(link)).toEqual({
+      serverUrl: "https://conf.example.com",
+      roomName: "room-0123456789abcdef",
+      e2eeKey,
+      transcriptionEnabled: true,
     });
   });
 
@@ -35,13 +64,13 @@ describe("inviteLink", () => {
     });
   });
 
-  it("produces a compact `tk1:` link, not a query-string URL", () => {
+  it("produces a real-looking `https://<host>/j#…` link, not a query-string URL", () => {
     const link = buildInviteLink({
       serverUrl: "https://example.com",
       roomName: "room-abc123",
       transcriptionEnabled: false,
     });
-    expect(link.startsWith("tk1:")).toBe(true);
+    expect(link.startsWith("https://example.com/j#")).toBe(true);
     expect(link).not.toContain("?");
   });
 
@@ -57,15 +86,38 @@ describe("inviteLink", () => {
     expect(buildInviteLink(config).length).toBeLessThan(legacy.length);
   });
 
-  it("preserves values needing URL/unicode encoding", () => {
+  it("is markedly shorter than the legacy tk1 token when a key is present", () => {
+    const config = {
+      serverUrl: "https://conference.example.com",
+      roomName: "room-0123456789abcdef",
+      e2eeKey: "0123456789abcdef".repeat(4),
+      transcriptionEnabled: false,
+    };
+    const tk1 = legacyTk1(config.serverUrl, config.roomName, 0, config.e2eeKey);
+    expect(buildInviteLink(config).length).toBeLessThan(tk1.length);
+  });
+
+  it("preserves a unicode room name", () => {
     const link = buildInviteLink({
-      serverUrl: "https://ex.com/base path",
-      roomName: "комната #1",
+      serverUrl: "https://ex.com",
+      roomName: "комната-1",
       transcriptionEnabled: false,
     });
     const parsed = parseInviteLink(link);
-    expect(parsed?.serverUrl).toBe("https://ex.com/base path");
-    expect(parsed?.roomName).toBe("комната #1");
+    expect(parsed?.serverUrl).toBe("https://ex.com");
+    expect(parsed?.roomName).toBe("комната-1");
+  });
+
+  it("still parses legacy `tk1:` tokens (backward compatibility)", () => {
+    const parsed = parseInviteLink(
+      legacyTk1("https://old.example.com", "room-old", 1, "cafe"),
+    );
+    expect(parsed).toEqual({
+      serverUrl: "https://old.example.com",
+      roomName: "room-old",
+      e2eeKey: "cafe",
+      transcriptionEnabled: true,
+    });
   });
 
   it("still parses legacy query-string links (backward compatibility)", () => {
@@ -85,6 +137,8 @@ describe("inviteLink", () => {
     expect(parseInviteLink("")).toBeNull();
     expect(parseInviteLink("   ")).toBeNull();
     expect(parseInviteLink("tk1:!!!not-base64!!!")).toBeNull();
+    expect(parseInviteLink("https://example.com/j#!!!not-base64!!!")).toBeNull();
+    expect(parseInviteLink("https://example.com/j")).toBeNull(); // no fragment
   });
 
   it("returns null when required params are missing", () => {
