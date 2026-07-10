@@ -5,12 +5,19 @@ import userEvent from "@testing-library/user-event";
 const sendMock = vi.fn().mockResolvedValue(undefined);
 let chatMessages: Array<{ id?: string; timestamp: number; from?: { identity: string }; message: string }> = [];
 
+const roomMock = {
+  localParticipant: { identity: "me", sendFile: vi.fn().mockResolvedValue({ id: "x" }) },
+  registerByteStreamHandler: vi.fn(),
+  unregisterByteStreamHandler: vi.fn(),
+};
+
 vi.mock("@livekit/components-react", () => ({
   useChat: () => ({
     chatMessages,
     send: sendMock,
     isSending: false,
   }),
+  useRoomContext: () => roomMock,
 }));
 
 import { ChatPanel } from "./ChatPanel";
@@ -36,7 +43,7 @@ describe("ChatPanel", () => {
     const user = userEvent.setup();
     render(<ChatPanel />);
 
-    const input = screen.getByPlaceholderText(/type a message/i);
+    const input = screen.getByPlaceholderText(/введите сообщение/i);
     await user.type(input, "hello world");
     await user.click(screen.getByRole("button", { name: /send/i }));
 
@@ -48,7 +55,7 @@ describe("ChatPanel", () => {
     const user = userEvent.setup();
     render(<ChatPanel />);
 
-    const input = screen.getByPlaceholderText(/type a message/i);
+    const input = screen.getByPlaceholderText(/введите сообщение/i);
     await user.type(input, "   ");
     expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
 

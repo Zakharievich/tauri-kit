@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Required on macOS for the WebView to be granted camera / microphone
+       access; without these keys the OS silently denies getUserMedia. -->
+  <key>NSCameraUsageDescription</key>
+  <string>TauriKit использует камеру для видеосвязи во время конференций.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>TauriKit использует микрофон для аудиосвязи во время конференций.</string>
+</dict>
+</plist>
