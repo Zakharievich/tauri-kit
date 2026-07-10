@@ -27,7 +27,7 @@
 ```bash
 sudo apt update && sudo apt install -y git
 git clone https://github.com/Zakharievich/tauri-kit.git
-cd tauri-kit && sudo bash deploy.sh --domain conf.example.com
+cd tauri-kit && sudo bash deploy.sh --domain conf.example.com --skip-network-fix
 ```
 Полная инструкция (и путь `curl … | sudo bash` одной строкой, и ручная установка) — [docs/README.md](./docs/README.md).
 После деплоя вы получите «URL сервера» вида `https://ваш-домен`.
