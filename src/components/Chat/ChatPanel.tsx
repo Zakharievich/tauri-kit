@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useChat, useRoomContext } from "@livekit/components-react";
-import { Paperclip, Send, X } from "lucide-react";
+import { Download, Paperclip, Send, X } from "lucide-react";
+import { downloadAttachment } from "../../services/fileDownload";
 
 export type ChatPanelProps = {
   /** When false the panel is kept mounted but hidden, so chat history and
@@ -12,6 +13,10 @@ export type ChatPanelProps = {
 
 /** Topic used for file transfers over LiveKit byte streams. */
 const FILE_TOPIC = "files";
+
+/** Hard cap on outgoing attachments (50 MB). Larger files are rejected before
+ *  they ever hit the DataChannel. */
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 type FileAttachment = {
   id: string;
@@ -34,22 +39,34 @@ function formatSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatTime(ts: number): string {
+  try {
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 /**
  * In-conference text chat + file sharing built on LiveKit's DataChannel:
  * text via the `useChat` hook, files via byte streams (`sendFile` /
  * `registerByteStreamHandler`). Nothing is persisted to disk, the server,
  * or any storage — history lives only in component state for the duration
  * of the session (HIGH RISK: "never store user data or session history
- * server-side").
+ * server-side"). Files can be saved to disk on demand via a native dialog.
  */
 export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
   const { chatMessages, send, isSending } = useChat();
   const room = useRoomContext();
   const [draft, setDraft] = useState("");
   const [attachments, setAttachments] = useState<FileAttachment[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesRef = useRef<HTMLUListElement>(null);
   // Track every object URL we create so we can revoke them all on unmount.
   const objectUrlsRef = useRef<string[]>([]);
+
+  const localIdentity = room?.localParticipant?.identity;
 
   // Receive files sent by other participants. Registered once for the room's
   // lifetime (ChatPanel stays mounted); unregistered on unmount.
@@ -61,23 +78,27 @@ export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
       participant: { identity: string },
     ) => {
       void (async () => {
-        const info = reader.info;
-        const chunks = await reader.readAll();
-        const blob = new Blob(chunks as BlobPart[], { type: info.mimeType });
-        const url = URL.createObjectURL(blob);
-        objectUrlsRef.current.push(url);
-        setAttachments((prev) => [
-          ...prev,
-          {
-            id: info.id,
-            name: info.name,
-            url,
-            mimeType: info.mimeType,
-            size: info.size,
-            from: participant.identity,
-            timestamp: info.timestamp || Date.now(),
-          },
-        ]);
+        try {
+          const info = reader.info;
+          const chunks = await reader.readAll();
+          const blob = new Blob(chunks as BlobPart[], { type: info.mimeType });
+          const url = URL.createObjectURL(blob);
+          objectUrlsRef.current.push(url);
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id: info.id,
+              name: info.name,
+              url,
+              mimeType: info.mimeType,
+              size: info.size,
+              from: participant.identity,
+              timestamp: info.timestamp || Date.now(),
+            },
+          ]);
+        } catch {
+          setError("Не удалось получить файл (повреждён или прерван).");
+        }
       })();
     };
 
@@ -125,6 +146,12 @@ export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
     return [...textItems, ...fileItems].sort((a, b) => a.timestamp - b.timestamp);
   }, [chatMessages, attachments]);
 
+  // Keep the newest message in view. `scrollTop` is a safe no-op in jsdom.
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [items]);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = draft.trim();
@@ -144,6 +171,10 @@ export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
     if (files.length === 0 || !room) return;
 
     for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`Файл «${file.name}» больше 50 МБ и не может быть отправлен.`);
+        continue;
+      }
       try {
         await room.localParticipant.sendFile(file, { topic: FILE_TOPIC });
         // Show the file in the sender's own chat too (the sender does not
@@ -164,7 +195,17 @@ export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
         ]);
       } catch (err) {
         console.error("Failed to send file", err);
+        setError(`Не удалось отправить файл «${file.name}».`);
       }
+    }
+  }
+
+  async function handleDownload(attachment: FileAttachment) {
+    try {
+      await downloadAttachment(attachment.name, attachment.url);
+    } catch (err) {
+      console.error("Failed to download file", err);
+      setError(`Не удалось сохранить файл «${attachment.name}».`);
     }
   }
 
@@ -179,21 +220,64 @@ export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
         )}
       </div>
 
-      <ul className="chat-panel__messages">
-        {items.map((item) => (
-          <li key={item.id} className="chat-panel__message">
-            <strong>{item.from}</strong>:{" "}
-            {item.kind === "text" ? (
-              item.message
-            ) : (
-              <a href={item.attachment.url} download={item.attachment.name} className="chat-panel__attachment">
-                📎 {item.attachment.name}
-                {item.attachment.size !== undefined && ` (${formatSize(item.attachment.size)})`}
-              </a>
-            )}
-          </li>
-        ))}
+      <ul className="chat-panel__messages" ref={messagesRef}>
+        {items.map((item) => {
+          const isSelf = localIdentity !== undefined && item.from === localIdentity;
+          return (
+            <li
+              key={item.id}
+              className={`chat-panel__message${isSelf ? " chat-panel__message--self" : ""}`}
+            >
+              <div className="chat-panel__bubble">
+                {!isSelf && <span className="chat-panel__author">{item.from}</span>}
+                {item.kind === "text" ? (
+                  <span className="chat-panel__text">{item.message}</span>
+                ) : (
+                  <div className="chat-panel__attachment">
+                    <span className="chat-panel__file-icon" aria-hidden>
+                      📎
+                    </span>
+                    <span className="chat-panel__file-meta">
+                      <span className="chat-panel__file-name" title={item.attachment.name}>
+                        {item.attachment.name}
+                      </span>
+                      <span className="chat-panel__file-sub">
+                        {formatSize(item.attachment.size)}
+                        {item.attachment.mimeType ? ` · ${item.attachment.mimeType}` : ""}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="icon-button chat-panel__download"
+                      onClick={() => void handleDownload(item.attachment)}
+                      aria-label={`Download ${item.attachment.name}`}
+                      title="Скачать файл"
+                    >
+                      <Download size={16} />
+                    </button>
+                  </div>
+                )}
+                <span className="chat-panel__time">{formatTime(item.timestamp)}</span>
+              </div>
+            </li>
+          );
+        })}
       </ul>
+
+      {error && (
+        <div className="chat-panel__error" role="alert">
+          <span>{error}</span>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+            title="Скрыть"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <form className="chat-panel__form" onSubmit={handleSubmit}>
         <input
@@ -207,7 +291,7 @@ export function ChatPanel({ isOpen = true, onClose }: ChatPanelProps) {
           className="icon-button"
           onClick={() => fileInputRef.current?.click()}
           aria-label="Attach file"
-          title="Прикрепить файл"
+          title="Прикрепить файл (до 50 МБ)"
         >
           <Paperclip size={18} />
         </button>

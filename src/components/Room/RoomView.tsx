@@ -28,17 +28,23 @@ export function RoomView() {
     { onlySubscribed: false },
   ).filter((trackRef) => notAgent(trackRef.participant.identity));
 
+  // Never render the local participant's own screen share back to themselves:
+  // doing so puts a live <VideoTrack> of their screen inside the app window,
+  // which — when the whole screen or the app window is the shared surface —
+  // is re-captured recursively ("screen-in-screen-in-screen"). Remote screen
+  // shares are still shown normally.
   const screenTracks = useTracks(
     [{ source: Track.Source.ScreenShare, withPlaceholder: false }],
     { onlySubscribed: false },
   )
     .filter((trackRef) => notAgent(trackRef.participant.identity))
+    .filter((trackRef) => !trackRef.participant.isLocal)
     .filter(isTrackReference);
 
   const screenAudioTracks = useTracks(
     [{ source: Track.Source.ScreenShareAudio, withPlaceholder: false }],
     { onlySubscribed: false },
-  );
+  ).filter((trackRef) => !trackRef.participant.isLocal);
 
   function findScreenAudio(identity: string): RemoteAudioTrack | null {
     const ref = screenAudioTracks.find((a) => a.participant.identity === identity);
