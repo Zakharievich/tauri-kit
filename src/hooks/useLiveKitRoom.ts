@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Room } from "livekit-client";
 import { requestToken, TokenServiceError } from "../services/tokenService";
 import { createE2EESetup } from "../services/e2eeService";
+import { buildRoomOptions } from "../services/mediaOptions";
 import type { SessionConfig } from "../types";
 
 export type UseLiveKitRoomState = {
@@ -33,11 +34,14 @@ export function useLiveKitRoom(config: SessionConfig | null): UseLiveKitRoomStat
   const [error, setError] = useState<string | null>(null);
 
   const { room, keyProvider } = useMemo(() => {
+    // Tuned media defaults (noise suppression, adaptive stream, codec/publish
+    // settings) come from mediaOptions; the branch only adds the E2EE worker.
+    const roomOptions = buildRoomOptions(config ?? { e2eeKey: undefined });
     if (!config?.e2eeKey) {
-      return { room: new Room(), keyProvider: null };
+      return { room: new Room(roomOptions), keyProvider: null };
     }
     const { keyProvider, roomOptionsE2ee } = createE2EESetup();
-    return { room: new Room({ e2ee: roomOptionsE2ee }), keyProvider };
+    return { room: new Room({ ...roomOptions, e2ee: roomOptionsE2ee }), keyProvider };
     // config is fixed for the lifetime of a session (see doc comment above) — intentionally empty deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

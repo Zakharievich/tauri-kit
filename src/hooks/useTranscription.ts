@@ -38,7 +38,9 @@ function formatTranscriptText(transcript: string, summary: string): string {
 export function useTranscription(enabled = true): UseTranscriptionState {
   const room = useMaybeRoomContext();
   const [text, setText] = useState<string | null>(null);
-  const decoderRef = useRef<TextDecoder>(new TextDecoder());
+  // Lazily created once; passing `new TextDecoder()` as the useRef argument
+  // would allocate a throwaway decoder on every render.
+  const decoderRef = useRef<TextDecoder | null>(null);
 
   useEffect(() => {
     if (!enabled || !room) {
@@ -50,6 +52,7 @@ export function useTranscription(enabled = true): UseTranscriptionState {
         return;
       }
 
+      decoderRef.current ??= new TextDecoder();
       let message: AnyAgentMessage;
       try {
         message = JSON.parse(decoderRef.current.decode(payload)) as AnyAgentMessage;

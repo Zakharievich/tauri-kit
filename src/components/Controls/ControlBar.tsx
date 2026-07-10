@@ -2,6 +2,7 @@ import { Track } from "livekit-client";
 import { TrackToggle, DisconnectButton } from "@livekit/components-react";
 import { Check, MessageSquare, UserPlus, X } from "lucide-react";
 import { buildInviteLink } from "../../services/inviteLink";
+import { getScreenShareCaptureOptions } from "../../services/mediaOptions";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import type { SessionConfig } from "../../types";
 
@@ -29,17 +30,15 @@ export function ControlBar({ config, onLeave, onToggleChat }: ControlBarProps) {
     <div className="control-bar">
       <TrackToggle source={Track.Source.Microphone} />
       <TrackToggle source={Track.Source.Camera} />
-      {/* Request system/tab audio alongside the screen video. Browser support
-          is limited: works on Chromium (tab/window audio); on macOS system
-          audio needs a virtual device (BlackHole/Loopback). If the platform
-          can't provide audio, screen sharing still starts video-only. */}
-      {/* `selfBrowserSurface: "exclude"` keeps the app's own window out of the
-          getDisplayMedia picker so a user can't pick the TauriKit window as the
-          source (which would recurse). RoomView also filters the local screen
-          share out of the render, which is the primary recursion guard. */}
+      {/* Capture options are engine-specific (see getScreenShareCaptureOptions):
+          Chromium gets `selfBrowserSurface: "exclude"` (keeps the app window
+          out of the picker) + `systemAudio: "include"`; WebKit/WKWebView (macOS)
+          gets only `{ audio: true }` because those Chromium-only hints break
+          capture there. RoomView also filters the local screen share out of the
+          render, which is the primary recursion guard. */}
       <TrackToggle
         source={Track.Source.ScreenShare}
-        captureOptions={{ audio: true, selfBrowserSurface: "exclude", systemAudio: "include" }}
+        captureOptions={getScreenShareCaptureOptions()}
         title="Демонстрация экрана со звуком. На macOS для системного звука нужен виртуальный аудиодрайвер (BlackHole/Loopback)."
       />
 
@@ -61,7 +60,14 @@ export function ControlBar({ config, onLeave, onToggleChat }: ControlBarProps) {
         </button>
       )}
 
-      <DisconnectButton onClick={onLeave} className="control-bar__leave" aria-label="Выйти" title="Выйти">
+      {/* Wrap so the click event isn't forwarded as an argument to onLeave
+          (which is also used as LiveKit's onDisconnected(reason) handler). */}
+      <DisconnectButton
+        onClick={() => onLeave?.()}
+        className="control-bar__leave"
+        aria-label="Выйти"
+        title="Выйти"
+      >
         <X size={18} />
       </DisconnectButton>
     </div>
