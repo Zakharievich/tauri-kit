@@ -36,7 +36,7 @@
 ```bash
 sudo apt update && sudo apt install -y git
 git clone https://github.com/Zakharievich/tauri-kit.git
-cd tauri-kit && sudo bash deploy.sh --domain conf.example.com
+cd tauri-kit && sudo bash deploy.sh --domain conf.example.com --skip-network-fix
 ```
 
 **Вариант 2 — одной строкой (bootstrap сам поставит git, склонирует репо и запустит deploy.sh):**
