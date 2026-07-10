@@ -69,16 +69,20 @@ export function JoinPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   // Remember settings (never the E2EE key) for next launch. Only the "create"
-  // flow reads these back; the join flow ignores them.
+  // flow reads these back; the join flow ignores them. Debounced so we don't
+  // write to localStorage on every keystroke in the text fields.
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ serverUrl, identity, e2eeEnabled, transcriptionEnabled }),
-      );
-    } catch {
-      // localStorage may be unavailable; persistence is best-effort.
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ serverUrl, identity, e2eeEnabled, transcriptionEnabled }),
+        );
+      } catch {
+        // localStorage may be unavailable; persistence is best-effort.
+      }
+    }, 300);
+    return () => clearTimeout(timer);
   }, [serverUrl, identity, e2eeEnabled, transcriptionEnabled]);
 
   function handleToggleE2ee(checked: boolean) {

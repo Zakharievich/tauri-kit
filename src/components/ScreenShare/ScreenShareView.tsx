@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { VideoTrack } from "@livekit/components-react";
 import type { TrackReference } from "@livekit/components-react";
 import { Maximize2, Volume2, VolumeX } from "lucide-react";
@@ -20,6 +20,14 @@ export function ScreenShareView({ trackRef, audioTrack }: ScreenShareViewProps) 
   const containerRef = useRef<HTMLDivElement>(null);
   const [muted, setMuted] = useState(false);
 
+  // Keep the track's volume in sync with `muted`. Doing it here (instead of
+  // inside the setMuted updater) keeps the updater pure and re-applies the mute
+  // whenever `audioTrack` is swapped for a new one (which would otherwise start
+  // at full volume).
+  useEffect(() => {
+    audioTrack?.setVolume(muted ? 0 : 1);
+  }, [muted, audioTrack]);
+
   function toggleFullscreen() {
     const el = containerRef.current;
     if (!el) return;
@@ -31,11 +39,7 @@ export function ScreenShareView({ trackRef, audioTrack }: ScreenShareViewProps) 
   }
 
   function toggleMute() {
-    setMuted((prev) => {
-      const next = !prev;
-      audioTrack?.setVolume(next ? 0 : 1);
-      return next;
-    });
+    setMuted((prev) => !prev);
   }
 
   return (

@@ -22,7 +22,7 @@ vi.mock("@livekit/components-react", () => ({
 
 const downloadAttachmentMock = vi.fn().mockResolvedValue(true);
 vi.mock("../../services/fileDownload", () => ({
-  downloadAttachment: (name: string, url: string) => downloadAttachmentMock(name, url),
+  downloadAttachment: (name: string, blob: Blob) => downloadAttachmentMock(name, blob),
 }));
 
 import { ChatPanel } from "./ChatPanel";
@@ -107,17 +107,17 @@ describe("ChatPanel", () => {
     expect(screen.getByText("notes.txt")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /download notes\.txt/i }));
-    expect(downloadAttachmentMock).toHaveBeenCalledWith("notes.txt", "blob:mock");
+    expect(downloadAttachmentMock).toHaveBeenCalledWith("notes.txt", file);
   });
 
-  it("rejects files larger than 50 MB and shows an error", async () => {
+  it("rejects files larger than the 25 MB limit and shows an error", async () => {
     const user = userEvent.setup();
     const { container } = render(<ChatPanel />);
 
-    const big = fileOfSize("huge.bin", 51 * 1024 * 1024);
+    const big = fileOfSize("huge.bin", 26 * 1024 * 1024);
     await user.upload(getFileInput(container), big);
 
     expect(roomMock.localParticipant.sendFile).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent(/50 МБ/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/25 МБ/i);
   });
 });

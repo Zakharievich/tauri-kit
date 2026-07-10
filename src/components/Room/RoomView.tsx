@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   GridLayout,
   ParticipantTile,
@@ -44,7 +45,23 @@ export function RoomView() {
   const screenAudioTracks = useTracks(
     [{ source: Track.Source.ScreenShareAudio, withPlaceholder: false }],
     { onlySubscribed: false },
-  ).filter((trackRef) => !trackRef.participant.isLocal);
+  )
+    .filter((trackRef) => notAgent(trackRef.participant.identity))
+    .filter((trackRef) => !trackRef.participant.isLocal);
+
+  // Dev-only diagnostics for the macOS/WKWebView screen-share duplication issue
+  // (docs plan 3.2b): logs how each track is classified so mis-tagged or
+  // duplicated shares can be spotted on a real Mac. Stripped from prod builds.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const describe = (label: string, refs: { participant: { identity: string; isLocal: boolean }; publication?: { source?: string; trackSid?: string } }[]) =>
+      refs.map((r) => `${label}[${r.participant.identity}${r.participant.isLocal ? ",local" : ""}] sid=${r.publication?.trackSid ?? "-"} src=${r.publication?.source ?? "-"}`);
+    console.debug("[RoomView tracks]", [
+      ...describe("cam", cameraTracks),
+      ...describe("screen", screenTracks),
+      ...describe("screenAudio", screenAudioTracks),
+    ]);
+  }, [cameraTracks, screenTracks, screenAudioTracks]);
 
   function findScreenAudio(identity: string): RemoteAudioTrack | null {
     const ref = screenAudioTracks.find((a) => a.participant.identity === identity);

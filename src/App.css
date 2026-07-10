@@ -470,6 +470,39 @@ button {
   flex-shrink: 0;
 }
 
+.chat-panel__hint {
+  flex-shrink: 0;
+  padding: 0 0.85em 0.2em;
+  font-size: 0.7rem;
+  color: var(--chat-muted);
+}
+
+/* A file that is still transferring (being sent or received) is shown dimmed. */
+.chat-panel__attachment--pending {
+  opacity: 0.7;
+}
+
+/* Overlay button shown only when the webview blocks audio autoplay (macOS
+   WKWebView). StartAudio hides itself once playback has started. */
+.room-page__start-audio {
+  position: absolute;
+  top: 1em;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+}
+
+.room-page__start-audio button {
+  padding: 0.6em 1.1em;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  background-color: #2d6cdf;
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
 .screen-share-view {
   position: relative;
   flex: 1;
