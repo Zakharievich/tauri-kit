@@ -25,6 +25,7 @@
 
 **1. Разверните сервер** на VPS (Ubuntu 24.04). Создайте DNS A‑запись на IP сервера, затем разверните всё **одним скриптом**:
 ```bash
+sudo apt update && sudo apt install -y git
 git clone https://github.com/Zakharievich/tauri-kit.git
 cd tauri-kit && sudo bash deploy.sh --domain conf.example.com
 ```
