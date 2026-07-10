@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { LiveKitRoom } from "@livekit/components-react";
 import "@livekit/components-styles";
@@ -11,24 +12,37 @@ import type { SessionConfig } from "../types";
 
 type RoomContentProps = {
   config: SessionConfig;
-  onLeave: (transcriptText: string | null) => void;
+  transcriptRef: MutableRefObject<string | null>;
+  onLeave: () => void;
 };
 
 /**
  * Rendered inside <LiveKitRoom>, so hooks relying on the LiveKit room
- * context (useTranscription) can be used here.
+ * context (useTranscription) can be used here. The accumulated transcript is
+ * mirrored into `transcriptRef` so the leave handler (which may run from
+ * `onDisconnected`) always sees the latest text.
  */
-function RoomContent({ config, onLeave }: RoomContentProps) {
+function RoomContent({ config, transcriptRef, onLeave }: RoomContentProps) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const { text } = useTranscription(config.transcriptionEnabled);
+
+  useEffect(() => {
+    transcriptRef.current = text;
+  }, [text, transcriptRef]);
 
   return (
     <>
       <div className="room-page__main">
         <RoomView />
-        <ControlBar onLeave={() => onLeave(text)} onToggleChat={() => setIsChatOpen((open) => !open)} />
+        <ControlBar
+          config={config}
+          onLeave={onLeave}
+          onToggleChat={() => setIsChatOpen((open) => !open)}
+        />
       </div>
-      {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
+      {/* Kept mounted while closed so chat history and incoming messages/files
+          are preserved; visibility is toggled via CSS. */}
+      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </>
   );
 }
@@ -38,9 +52,10 @@ function RoomContent({ config, onLeave }: RoomContentProps) {
  * useLiveKitRoom. Expects SessionConfig passed via router state from
  * JoinPage. Redirects back to "/" if no config is present.
  *
- * On leave, navigates to TranscriptPage carrying whatever transcript text
- * useTranscription accumulated (or null if the agent was absent/disabled —
- * graceful degradation, HIGH RISK 4.3).
+ * On leave: if transcription was enabled, go to TranscriptPage carrying the
+ * accumulated text; otherwise return straight to the home screen (no extra
+ * screen). A single idempotent handler is wired to both the Leave button and
+ * `onDisconnected` so the two never double-navigate.
  */
 export function RoomPage() {
   const navigate = useNavigate();
@@ -49,9 +64,19 @@ export function RoomPage() {
 
   const { token, serverUrl, room, isLoading, error } = useLiveKitRoom(config);
 
-  function handleLeave(transcriptText: string | null) {
-    navigate("/transcript", { state: { text: transcriptText } });
-  }
+  const leftRef = useRef(false);
+  const transcriptRef = useRef<string | null>(null);
+
+  const handleLeave = useCallback(() => {
+    if (leftRef.current) return;
+    leftRef.current = true;
+
+    if (config?.transcriptionEnabled) {
+      navigate("/transcript", { state: { text: transcriptRef.current } });
+    } else {
+      navigate("/");
+    }
+  }, [config, navigate]);
 
   if (!config) {
     return (
@@ -79,18 +104,17 @@ export function RoomPage() {
     );
   }
 
-
   return (
     <LiveKitRoom
       room={room}
       serverUrl={serverUrl}
       token={token}
       connect
-      onDisconnected={() => handleLeave(null)}
+      onDisconnected={handleLeave}
       data-lk-theme="default"
       style={{ height: "100vh", display: "flex" }}
     >
-      <RoomContent config={config} onLeave={handleLeave} />
+      <RoomContent config={config} transcriptRef={transcriptRef} onLeave={handleLeave} />
     </LiveKitRoom>
   );
 }

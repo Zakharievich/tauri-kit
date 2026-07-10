@@ -1,10 +1,22 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafb);
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
 }
+
+/* Never let the app body itself scroll — individual panes scroll internally
+   instead, so the window never shows horizontal/vertical scrollbars. */
+body {
+  overflow: hidden;
+}
+
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 16px;
@@ -19,31 +31,6 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
-}
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
 }
 
 a {
@@ -91,17 +78,19 @@ button {
   outline: none;
 }
 
-#greet-input {
-  margin-right: 5px;
-}
-
 .join-page {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 3em 1.5em;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5em;
+  padding: 2em 1.5em;
+  overflow-y: auto;
 }
 
 .join-page__form {
+  width: min(480px, 100%);
   display: flex;
   flex-direction: column;
   gap: 1.25em;
@@ -117,6 +106,33 @@ button {
 .join-page__label {
   font-weight: 500;
   font-size: 0.9em;
+}
+
+.join-page__hint {
+  font-size: 0.8em;
+  opacity: 0.75;
+}
+
+.join-page__hint--error {
+  color: #d33;
+  opacity: 1;
+}
+
+.join-page__divider {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+
+.join-page__divider::before,
+.join-page__divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: currentColor;
+  opacity: 0.4;
 }
 
 .join-page__field input {
@@ -166,7 +182,22 @@ button {
 .e2ee-key-field__buttons {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.6em;
+}
+
+/* Square button that holds a single icon (copy, send, attach, add, …). */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5em;
+  line-height: 0;
+}
+
+.copy-button--copied {
+  color: #16a34a;
+  border-color: #16a34a;
 }
 
 .join-page__submit {
@@ -197,20 +228,79 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
 }
 
 
 .room-view {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  padding: 0.5em;
+  overflow: hidden;
+}
+
+.room-view__screenshares {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  flex: 2;
+  min-height: 0;
+}
+
+/* When a screen share is present the camera grid shrinks to a filmstrip. */
+.room-view__screenshares + .lk-grid-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Bottom control bar: kept in normal flow below the grid (never overlaps it)
+   thanks to flex-shrink:0, with its own opaque background. */
+.control-bar {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.6em 0.8em;
+  background-color: #1f1f1f;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 1;
+}
+
+/* Leave button: red cross. */
+.control-bar__leave {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5em;
+  line-height: 0;
+  color: #fff;
+  background-color: #dc2626;
+  border-color: transparent;
+}
+
+.control-bar__leave:hover {
+  background-color: #b91c1c;
+  border-color: transparent;
 }
 
 .chat-panel {
   display: flex;
   flex-direction: column;
-  width: 280px;
+  flex-shrink: 0;
+  width: clamp(240px, 28vw, 320px);
   border-left: 1px solid rgba(0, 0, 0, 0.15);
   background-color: #fff;
+}
+
+/* Kept mounted while closed (preserves chat history / incoming messages);
+   just hidden. See ChatPanel bug fix. */
+.chat-panel--hidden {
+  display: none;
 }
 
 .chat-panel__header {
@@ -247,9 +337,36 @@ button {
 }
 
 .screen-share-view {
+  position: relative;
+  flex: 1;
+  min-width: 240px;
+  min-height: 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.5em;
+  background-color: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.screen-share-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.screen-share-view__controls {
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  display: flex;
+  gap: 0.4em;
+  cursor: default;
+}
+
+.screen-share-view__controls .icon-button {
+  background-color: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border-color: transparent;
 }
 
 .transcript-page {
