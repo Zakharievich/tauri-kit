@@ -20,12 +20,36 @@ vi.mock("@livekit/components-react", () => ({
   useRoomContext: () => roomMock,
 }));
 
+const downloadAttachmentMock = vi.fn().mockResolvedValue(true);
+vi.mock("../../services/fileDownload", () => ({
+  downloadAttachment: (name: string, url: string) => downloadAttachmentMock(name, url),
+}));
+
 import { ChatPanel } from "./ChatPanel";
+
+/** Builds a File whose `.size` is forced to `size` bytes (jsdom would
+ *  otherwise report 0 for an empty file). */
+function fileOfSize(name: string, size: number, type = "application/octet-stream"): File {
+  const file = new File(["x"], name, { type });
+  Object.defineProperty(file, "size", { value: size });
+  return file;
+}
+
+function getFileInput(container: HTMLElement): HTMLInputElement {
+  const input = container.querySelector('input[type="file"]');
+  if (!input) throw new Error("file input not found");
+  return input as HTMLInputElement;
+}
 
 describe("ChatPanel", () => {
   beforeEach(() => {
     sendMock.mockClear();
+    roomMock.localParticipant.sendFile.mockClear();
+    downloadAttachmentMock.mockClear();
     chatMessages = [];
+    // jsdom does not implement object URLs.
+    URL.createObjectURL = vi.fn(() => "blob:mock");
+    URL.revokeObjectURL = vi.fn();
   });
 
   it("renders existing chat messages", () => {
@@ -70,5 +94,30 @@ describe("ChatPanel", () => {
     await user.click(screen.getByRole("button", { name: /close chat/i }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("uploads a small file, shows its card, and downloads it on click", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ChatPanel />);
+
+    const file = fileOfSize("notes.txt", 1024, "text/plain");
+    await user.upload(getFileInput(container), file);
+
+    expect(roomMock.localParticipant.sendFile).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("notes.txt")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /download notes\.txt/i }));
+    expect(downloadAttachmentMock).toHaveBeenCalledWith("notes.txt", "blob:mock");
+  });
+
+  it("rejects files larger than 50 MB and shows an error", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<ChatPanel />);
+
+    const big = fileOfSize("huge.bin", 51 * 1024 * 1024);
+    await user.upload(getFileInput(container), big);
+
+    expect(roomMock.localParticipant.sendFile).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/50 МБ/i);
   });
 });

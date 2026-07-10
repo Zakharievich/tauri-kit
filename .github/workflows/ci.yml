@@ -143,10 +143,30 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [lint-and-test-frontend, lint-and-test-server, test-rust]
 
+    permissions:
+      contents: write # required to attach assets to the GitHub Release
+
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          # `label` becomes the human-readable platform (+arch) part of the
+          # artifact name. NOTE: macos-latest is an Apple Silicon runner, so the
+          # DMG is arm64-only — hence `macOS_arm64` (honest, not hidden). To ship
+          # a single `macOS` DMG for both arches, build `universal-apple-darwin`
+          # instead (heavier CI, needs both toolchains).
+          - platform: ubuntu-latest
+            label: Linux_x64
+            bundle: appimage
+            ext: AppImage
+          - platform: windows-latest
+            label: Windows_x64
+            bundle: nsis
+            ext: exe
+          - platform: macos-latest
+            label: macOS_arm64
+            bundle: dmg
+            ext: dmg
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout
@@ -181,12 +201,28 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        run: pnpm tauri build
+
+      - name: Rename bundle to versioned, platform-named artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"                # e.g. v1.0.6
+          DIR="src-tauri/target/release/bundle/${{ matrix.bundle }}"
+          SRC="$(ls "$DIR"/*.${{ matrix.ext }} | head -n1)"
+          DEST="$DIR/TauriKit_${TAG}_${{ matrix.label }}.${{ matrix.ext }}"
+          mv "$SRC" "$DEST"
+          echo "ASSET=$DEST" >> "$GITHUB_ENV"
+          echo "Renamed $SRC -> $DEST"
+
+      - name: Publish artifact to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 'TauriKit ${{ github.ref_name }}'
+          body: 'See the assets to download and run this version.'
+          draft: false
+          prerelease: false
+          files: ${{ env.ASSET }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'tauri-kit ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download and install this version.'
-          releaseDraft: false
-          prerelease: false

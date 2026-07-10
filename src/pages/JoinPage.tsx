@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Check, Copy } from "lucide-react";
 import { generateE2EEKey } from "../services/e2eeService";
 import { generateRoomName, parseInviteLink } from "../services/inviteLink";
+import type { ParsedInvite } from "../services/inviteLink";
 import { useCopyFeedback } from "../hooks/useCopyFeedback";
 import type { SessionConfig } from "../types";
 
@@ -28,11 +29,15 @@ function loadPersisted(): PersistedJoin {
 }
 
 /**
- * Join form. Two ways in:
- *  - **Create a new room** — the room name is generated automatically; the
- *    host optionally enables E2EE (and shares the key) or transcription.
- *  - **Join by link** — pasting an invite link autofills server URL, room
- *    name and the E2EE/transcription settings; the user only enters a name.
+ * Landing screen with two clearly separated flows:
+ *  - **Join by link** — paste an invite link and press "Join". The link's
+ *    contents (server URL, room name, E2EE key, transcription flag) are parsed
+ *    and kept internally; they are NEVER written into the visible form fields,
+ *    so the user doesn't see the technical room name. The user only supplies
+ *    their name. This flow never creates a room.
+ *  - **Create a new room** ("Создать") — mints a fresh room name and uses the
+ *    currently selected settings (server URL, E2EE, transcription). This flow
+ *    is independent of the invite link.
  *
  * Previously entered settings (except the E2EE key) are remembered in
  * localStorage. The E2EE key never leaves the client, is never persisted and
@@ -51,12 +56,15 @@ export function JoinPage() {
   );
 
   const [inviteInput, setInviteInput] = useState("");
-  const [linkRoomName, setLinkRoomName] = useState<string | null>(null);
+  // Parsed invite kept hidden from the form; used only when the user presses
+  // "Join". Never mirrored into the visible fields above.
+  const [parsedInvite, setParsedInvite] = useState<ParsedInvite | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const { copied: keyCopied, copy: copyKey } = useCopyFeedback();
 
-  // Remember settings (never the E2EE key) for next launch.
+  // Remember settings (never the E2EE key) for next launch. Only the "create"
+  // flow reads these back; the join flow ignores them.
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -93,7 +101,7 @@ export function JoinPage() {
     setInviteInput(value);
 
     if (!value.trim()) {
-      setLinkRoomName(null);
+      setParsedInvite(null);
       setInviteError(null);
       return;
     }
@@ -101,38 +109,42 @@ export function JoinPage() {
     const parsed = parseInviteLink(value);
     if (!parsed) {
       setInviteError("Не удалось распознать ссылку-приглашение");
-      setLinkRoomName(null);
+      setParsedInvite(null);
       return;
     }
 
     setInviteError(null);
-    setServerUrl(parsed.serverUrl);
-    setLinkRoomName(parsed.roomName);
-
-    if (parsed.e2eeKey) {
-      setE2eeEnabled(true);
-      setE2eeKey(parsed.e2eeKey);
-      setTranscriptionEnabled(false);
-    } else {
-      setE2eeEnabled(false);
-      setE2eeKey("");
-      setTranscriptionEnabled(parsed.transcriptionEnabled);
-    }
+    setParsedInvite(parsed);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  /** Join flow: use the parsed invite (hidden from the form) + the user's name.
+   *  Never generates a room name, never creates a room. */
+  function handleJoinFromLink() {
+    if (!parsedInvite || !identity.trim()) return;
+
+    const config: SessionConfig = {
+      serverUrl: parsedInvite.serverUrl,
+      roomName: parsedInvite.roomName,
+      identity: identity.trim(),
+      e2eeKey: parsedInvite.e2eeKey,
+      transcriptionEnabled: parsedInvite.transcriptionEnabled,
+    };
+
+    navigate("/room", { state: config });
+  }
+
+  /** Create flow: always mints a fresh room name from the visible settings;
+   *  independent of the invite link. */
+  function handleCreateRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!identity.trim() || !serverUrl.trim()) {
       return;
     }
 
-    // Join the room from the invite link, or create a fresh one.
-    const roomName = linkRoomName ?? generateRoomName();
-
     const config: SessionConfig = {
       serverUrl: serverUrl.trim(),
-      roomName,
+      roomName: generateRoomName(),
       identity: identity.trim(),
       e2eeKey: e2eeEnabled && e2eeKey.trim() ? e2eeKey.trim() : undefined,
       transcriptionEnabled,
@@ -141,22 +153,48 @@ export function JoinPage() {
     navigate("/room", { state: config });
   }
 
+  const canJoin = parsedInvite !== null && identity.trim().length > 0;
+
   return (
     <main className="join-page">
-      <form className="join-page__form" onSubmit={handleSubmit}>
+      <form className="join-page__form" onSubmit={handleCreateRoom}>
         <label className="join-page__field">
-          <span className="join-page__label">Присоединиться по ссылке</span>
+          <span className="join-page__label">Ваше имя</span>
           <input
-            value={inviteInput}
-            onChange={(e) => handleInviteChange(e.currentTarget.value)}
-            placeholder="Вставьте ссылку-приглашение"
-            autoComplete="off"
-            spellCheck={false}
+            value={identity}
+            onChange={(e) => setIdentity(e.currentTarget.value)}
+            placeholder="your-name"
+            required
           />
+        </label>
+
+        <label className="join-page__field">
+          <span className="join-page__label">Присоединиться к комнате по ссылке</span>
+          <div className="join-page__invite-row">
+            <input
+              value={inviteInput}
+              onChange={(e) => handleInviteChange(e.currentTarget.value)}
+              placeholder="Вставьте ссылку-приглашение"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button
+              type="button"
+              className="join-page__join"
+              onClick={handleJoinFromLink}
+              disabled={!canJoin}
+              title={
+                parsedInvite
+                  ? identity.trim()
+                    ? "Присоединиться к комнате"
+                    : "Введите своё имя"
+                  : "Вставьте корректную ссылку-приглашение"
+              }
+            >
+              Join
+            </button>
+          </div>
           {inviteError && <span className="join-page__hint join-page__hint--error">{inviteError}</span>}
-          {linkRoomName && (
-            <span className="join-page__hint">Комната из ссылки: {linkRoomName}</span>
-          )}
         </label>
 
         <div className="join-page__divider">
@@ -169,16 +207,6 @@ export function JoinPage() {
             value={serverUrl}
             onChange={(e) => setServerUrl(e.currentTarget.value)}
             placeholder="https://your-domain.com"
-            required
-          />
-        </label>
-
-        <label className="join-page__field">
-          <span className="join-page__label">Ваше имя</span>
-          <input
-            value={identity}
-            onChange={(e) => setIdentity(e.currentTarget.value)}
-            placeholder="your-name"
             required
           />
         </label>
@@ -236,7 +264,7 @@ export function JoinPage() {
         </fieldset>
 
         <button type="submit" className="join-page__submit">
-          Подключиться
+          Создать
         </button>
       </form>
     </main>
