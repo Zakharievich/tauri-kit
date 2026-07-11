@@ -1,6 +1,6 @@
 [package]
 name = "tauri-kit"
-version = "1.0.8"
+version = "1.0.9"
 description = "TauriKit — cross-platform desktop app for self-hosted audio/video conferencing (LiveKit SFU, optional E2EE, optional STT/summary agent)"
 authors = ["Zakharievich"]
 edition = "2021"
