@@ -5,7 +5,9 @@ services:
   # iptables rules for published ports). Linux-only — this compose file
   # targets the VPS deployment target described in docs/README.md.
   livekit:
-    image: livekit/livekit-server:latest
+    # Pinned for reproducible deploys — `:latest` would silently pull a new SFU
+    # major on any redeploy. Bump deliberately after checking the changelog.
+    image: livekit/livekit-server:v1.13.3
     restart: unless-stopped
     network_mode: host
     command: --config /etc/livekit.yaml

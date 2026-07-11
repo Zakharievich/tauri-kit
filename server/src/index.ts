@@ -10,7 +10,16 @@ type TokenRequestBody = {
 };
 
 export function buildServer(config = loadConfig()) {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    // Behind Caddy (see Caddyfile), so the socket peer is the proxy on
+    // loopback. Trust the proxy headers so the rate limiter keys on the real
+    // client IP instead of lumping everyone under 127.0.0.1.
+    trustProxy: true,
+    // In production, skip the per-request access log (Caddy already logs
+    // requests) to cut logging overhead; errors are still logged.
+    disableRequestLogging: config.isProduction,
+  });
 
   app.register(cors, {
     origin: config.allowedOrigins,
