@@ -29,3 +29,14 @@ serde_json = "1"
 all = "warn"
 pedantic = "warn"
 
+# Release profile tuned for a thin Tauri shell: the Rust side is a tiny
+# desktop wrapper (one command, no networking) — all the real work runs in
+# the WebRTC/JS layer — so we optimize the binary for size and startup
+# footprint rather than raw Rust throughput.
+[profile.release]
+opt-level = "s"     # optimize for size
+lto = true          # cross-crate inlining + dead-code elimination
+codegen-units = 1   # better optimization at the cost of compile time
+strip = true        # drop symbols from the shipped binary
+panic = "abort"     # no unwinding tables; smaller binary + smaller runtime
+

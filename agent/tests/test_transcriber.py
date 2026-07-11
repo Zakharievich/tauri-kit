@@ -5,7 +5,12 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from transcriber import Transcriber, TranscriptSegment
+from transcriber import (
+    MAX_BUFFERED_SECONDS,
+    Transcriber,
+    TranscriptSegment,
+    _ParticipantBuffer,
+)
 
 
 class FakeAudioFrame:
@@ -42,6 +47,8 @@ async def test_push_frame_drops_chunk_and_stays_alive_when_stt_unreachable(monke
     frame = FakeAudioFrame(data=b"\x00\x00" * 48000, sample_rate=48000, samples_per_channel=48000 * 6)
 
     await transcriber.push_frame("alice", frame)
+    # Flushing now runs in the background — wait for it before asserting.
+    await transcriber.wait_for_pending_flushes()
 
     assert transcriber.get_transcript_text() == ""
     assert transcriber.segments == []
@@ -61,6 +68,7 @@ async def test_push_frame_records_segment_on_successful_transcription(monkeypatc
 
     frame = FakeAudioFrame(data=b"\x00\x00" * 48000, sample_rate=48000, samples_per_channel=48000 * 6)
     await transcriber.push_frame("alice", frame)
+    await transcriber.wait_for_pending_flushes()
 
     assert "hello there" in transcriber.get_transcript_text()
     assert len(transcriber.segments) == 1
@@ -81,10 +89,33 @@ async def test_empty_transcription_result_produces_no_segment(monkeypatch):
 
     frame = FakeAudioFrame(data=b"\x00\x00" * 48000, sample_rate=48000, samples_per_channel=48000 * 6)
     await transcriber.push_frame("alice", frame)
+    await transcriber.wait_for_pending_flushes()
 
     assert transcriber.segments == []
 
     await transcriber.aclose()
+
+
+def test_participant_buffer_drops_oldest_frames_over_cap():
+    """A stalled STT backend must not let one participant's buffer grow without
+    bound: once over MAX_BUFFERED_SECONDS the oldest frames are dropped."""
+    buffer = _ParticipantBuffer(sample_rate=48000, num_channels=1)
+
+    # Push well past the cap in 1-second frames (samples_per_channel == sample_rate).
+    total = int(MAX_BUFFERED_SECONDS) + 10
+    for i in range(total):
+        buffer.add(
+            FakeAudioFrame(
+                data=bytes([i % 256]) * 2,
+                sample_rate=48000,
+                samples_per_channel=48000,
+            )
+        )
+
+    assert buffer.buffered_seconds <= MAX_BUFFERED_SECONDS
+    # Older frames were discarded, so we hold fewer than everything pushed.
+    assert len(buffer.frames) < total
+    assert len(buffer.frames) == len(buffer.frame_durations)
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,8 @@ export type AppConfig = Readonly<{
   allowedOrigins: string[];
   port: number;
   tokenTtlSeconds: number;
+  /** True when NODE_ENV=production — used to trim per-request logging etc. */
+  isProduction: boolean;
 }>;
 
 function parseEnv(env: NodeJS.ProcessEnv): AppConfig {
@@ -58,6 +60,7 @@ function parseEnv(env: NodeJS.ProcessEnv): AppConfig {
       .filter(Boolean),
     port: data.PORT,
     tokenTtlSeconds: data.TOKEN_TTL_SECONDS,
+    isProduction,
   };
 }
 

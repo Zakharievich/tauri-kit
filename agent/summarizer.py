@@ -19,12 +19,28 @@ logger = logging.getLogger("agent.summarizer")
 
 REQUEST_TIMEOUT_SECONDS = 60.0
 
+# Upper bound on how much transcript text we feed into the summary prompt. A
+# whole-meeting transcript can grow large; sending all of it inflates memory,
+# Ollama latency and context usage for little gain. We keep the most recent
+# text (the tail), which is what a short wrap-up summary cares about most.
+MAX_TRANSCRIPT_CHARS = 12000
+
+_TRUNCATION_NOTICE = "[…earlier transcript omitted…]\n"
+
 PROMPT_TEMPLATE = (
     "Summarize the following call transcript in 3 to 5 concise bullet "
     "points, written in the same language as the transcript. Only output "
     "the bullet points, no preamble.\n\n"
     "Transcript:\n{transcript}"
 )
+
+
+def _truncate_transcript(transcript_text: str) -> str:
+    """Keeps the last MAX_TRANSCRIPT_CHARS characters, prefixed with a notice
+    when anything was dropped. Returns the text unchanged when within bounds."""
+    if len(transcript_text) <= MAX_TRANSCRIPT_CHARS:
+        return transcript_text
+    return _TRUNCATION_NOTICE + transcript_text[-MAX_TRANSCRIPT_CHARS:]
 
 
 async def summarize(
@@ -46,7 +62,7 @@ async def summarize(
         logger.info("Empty transcript, skipping summary request")
         return ""
 
-    prompt = PROMPT_TEMPLATE.format(transcript=transcript_text)
+    prompt = PROMPT_TEMPLATE.format(transcript=_truncate_transcript(transcript_text))
 
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS) as client:
